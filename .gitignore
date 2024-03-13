@@ -9,7 +9,9 @@ __pycache__/
 */build/
 */dist/
 *_cuda.egg-info/
+.idea/
 
+flownet/**/*.so
 flownet/channelnorm_package/build/
 flownet/channelnorm_package/dist/
 flownet/correlation_package/build/

@@ -33,6 +33,7 @@ def read_mit_pose(base_dir, sequence_gt):
 
     return dataframe
 
+
 def read_mit_img(base_dir, sequence, start, stop):
     """
     -> base_dir: data/mit
@@ -41,17 +42,18 @@ def read_mit_img(base_dir, sequence, start, stop):
     imgs = []
     timestamps = []
     path_img = '{}/sequences/{}/rgb/'.format(base_dir, sequence)
-    temp = sorted(glob.glob(path_img, '*.{}'.format('.jpg')))
+    temp = sorted(glob.glob(os.path.join(path_img, '*.jpg')))
     for i in range(len(temp)):
         frame_time = int(float(Path(temp[i]).stem))
 
         if start <= frame_time <= stop:
-            img_label = '{}-{}.jpg'.format(sequence, Path(temp[i]).stem)
+            img_label = '{};{}.jpg'.format(sequence, Path(temp[i]).stem)
             imgs.append([frame_time, img_label])
             timestamps.append(frame_time)
 
     timestamps = np.array(timestamps, dtype=np.uint64)
     return timestamps, imgs
+
 
 def read_mit_imu(base_dir, sequence, start, stop, timestamps):
     """
@@ -75,19 +77,21 @@ def read_mit_imu(base_dir, sequence, start, stop, timestamps):
     imus = []
 
     for i in range(timestamps.shape[0] - 1):
+        frame1_time = timestamps[i]
         frame2_time = timestamps[i + 1]
         data_imu = np.delete(data, np.where(data[:, 0].astype(np.uint64) > frame2_time), axis=0)
-        imus.append([frame2_time, np.concatenate((data_imu[-3:, 8:11], data_imu[-3:, 5:8]), axis=1)])
+        imus.append([frame1_time, np.concatenate((data_imu[-3:, 8:11], data_imu[-3:, 5:8]), axis=1)])
 
     return imus
 
+
 def get_pose_by_timestamps(poses, timestamps):
     new_poses = []
-    for i in range(timestamps.shape[0] - 1):
-        x = np.interp(timestamps[i+1], poses['timestamp'], poses['x'])
-        y = np.interp(timestamps[i+1], poses['timestamp'], poses['y'])
-        theta = np.interp(timestamps[i+1], poses['timestamp'], poses['theta'])
-        new_poses.append([timestamps[i+1], np.array([x, y, 0, 0, 0, theta])])
+    for i in range(timestamps.shape[0]):
+        x = np.interp(timestamps[i], poses['timestamp'], poses['x'])
+        y = np.interp(timestamps[i], poses['timestamp'], poses['y'])
+        theta = np.interp(timestamps[i], poses['timestamp'], poses['theta'])
+        new_poses.append([timestamps[i], np.array([x, y, 0, 0, 0, theta])])
 
     return new_poses
 

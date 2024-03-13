@@ -11,7 +11,7 @@ import shutil
 from shutil import rmtree
 import random
 
-from torch._six import int_classes as _int_classes
+#from torch._six import int_classes as _int_classes
 from torchvision import transforms
 
 from utils.file_io import read_kitti_pose

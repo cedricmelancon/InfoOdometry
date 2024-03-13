@@ -12,7 +12,7 @@ from shutil import rmtree
 from glob import glob
 import random
 
-from torch._six import int_classes as _int_classes
+#from torch._six import int_classes as _int_classes
 from torchvision import transforms
 
 from utils.tools import get_relative_pose 

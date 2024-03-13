@@ -27,6 +27,7 @@ from utils.tools import ScheduledOptim
 from utils.tools import construct_models
 
 from param import Param
+from dataset.mit_stata_center_dataset import load_mit_clips
 from dataset.euroc_dataset import load_euroc_clips
 from dataset.kitti_dataset import load_kitti_clips
 from dataset.vkitti2_dataset import load_vkitti2_clips
@@ -50,7 +51,7 @@ def train(args):
         assert args.finetune
         print("=> only finetune pose_model, while fixing encoder and transition_model")
     if args.finetune:
-        assert args.load_model is not "none"
+        assert args.load_model != "none"
 
     if args.finetune_only_decoder:
         param_list = list(pose_model.parameters())
@@ -75,7 +76,7 @@ def train(args):
             raise ValueError('optimizer {} is currently not supported'.format(args.optimizer))
     
     # NOTE: Load prev ckp after we have specified optimizer 
-    if args.load_model is not "none":
+    if args.load_model != "none":
         assert os.path.exists(args.load_model)
         print("=> loading previous trained model: {}".format(args.load_model))
         model_dicts = torch.load(args.load_model, map_location="cuda:0")
@@ -164,6 +165,26 @@ def train(args):
             vkitti2_clone_only = args.vkitti2_clone_only,
             t_euler_loss=args.t_euler_loss,
             subscene = args.vkitti2_eval_subscene
+        )
+    elif args.dataset == "mit":
+        train_clips = load_mit_clips(
+            seqs = args.train_sequences,
+            seqs_gt = args.train_sequences_gt,
+            batch_size = args.batch_size,
+            shuffle = True,
+            overlap = args.clip_overlap,
+            args = args,
+            sample_size_ratio = args.sample_size_ratio
+        )
+
+        eval_clips = load_mit_clips(
+            seqs = args.eval_sequences,
+            seqs_gt=args.eval_sequences_gt,
+            batch_size = args.eval_batch_size,
+            shuffle = False,
+            overlap = False,
+            args = args,
+            sample_size_ratio = 1.
         )
 
     else:

@@ -16,7 +16,7 @@ class Param:
         self.parser.add_argument('--noise_std_factor', type=float, default=0.1)
         self.parser.add_argument('--img_prefeat', type=str, default='flownet', help='none, flownet or resnet (not implemented yet)')
         self.parser.add_argument('--failure_type', type=str, default='noise', help='noise, missing, mixed or none')
-        self.parser.add_argument('--sample_size_ratio', type=float, default=1., help='the ratio of total non-overlapped clips (1) only take effect in (0,1) (2) only used in training')
+        self.parser.add_argument('--sample_size_ratio', type=float, default=0.4, help='the ratio of total non-overlapped clips (1) only take effect in (0,1) (2) only used in training')
         self.parser.add_argument('--imu_only', action='store_const', default=False, const=True, help='need to be used with --transition_model double')
         
         # args to put world_kl_beta out of torch.max/min
@@ -98,10 +98,12 @@ class Param:
         self.parser.add_argument('--eval_interval', type=int, default=5, help='the frequency (by epoch) to eval and save the ckp')
 
         # args for dataset
-        self.parser.add_argument('--dataset', type=str, default='euroc', choices=["kitti", "euroc", "vkitti2"], help='euroc, kitti (determine base_dir, train/eval_sequences')
-        self.parser.add_argument('--base_dir', type=str, default='none', help='should not be specified')
-        self.parser.add_argument('--train_sequences', type=str, default='none', help='separated by , ')
-        self.parser.add_argument('--eval_sequences', type=str, default='none', help='separated by , ')
+        self.parser.add_argument('--dataset', type=str, default='euroc', choices=["kitti", "mit", "euroc", "vkitti2"], help='euroc, kitti (determine base_dir, train/eval_sequences')
+        self.parser.add_argument('--base_dir', type=str, default='/data', help='should not be specified')
+        self.parser.add_argument('--train_sequences', type=str, default='2012-01-25-12-14-25', help='separated by , ')
+        self.parser.add_argument('--train_sequences_gt', type=str, default='2012-01-25-12-14-25_part1_floor2', help='separated by , ')
+        self.parser.add_argument('--eval_sequences', type=str, default='2012-04-03-07-56-24', help='separated by , ')
+        self.parser.add_argument('--eval_sequences_gt', type=str, default='2012-04-03-07-56-24_part1_floor2', help='separated by , ')
         self.parser.add_argument('--clip_length', type=int, default=5)
         self.parser.add_argument('--clip_overlap', action='store_const', default=False, const=True)
         self.parser.add_argument('--euroc_ds_train', type=str, default="both", choices=["downsample", "raw_freq", "both"])
@@ -208,7 +210,9 @@ class Param:
             
             self.args.sensors         = self.args.sensors.split(',')
             self.args.train_sequences = self.args.train_sequences.split(',')
+            self.args.train_sequences_gt = self.args.train_sequences_gt.split(',')
             self.args.eval_sequences  = self.args.eval_sequences.split(',')
+            self.args.eval_sequences_gt = self.args.eval_sequences_gt.split(',')
             self.check_eligibility()
             exp_folder = '{}{}'.format(self.args.ckp_dir, self.args.exp_name)
             if os.path.isdir(exp_folder):

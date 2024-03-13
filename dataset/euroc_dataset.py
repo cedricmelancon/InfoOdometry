@@ -9,7 +9,7 @@ from tqdm import tqdm
 from shutil import rmtree
 import random
 
-from torch._six import int_classes as _int_classes
+#from torch._six import int_classes as _int_classes
 from utils.tools import get_relative_pose
 from utils.tools import get_zero_se3
 

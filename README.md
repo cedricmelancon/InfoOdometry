@@ -68,7 +68,13 @@ This repo also contains **our re-implementations of DeepVO and VINet**:
 
 ## Usage 
 1. training
-    + ```python main.py --gpu 0 --dataset kitti --batch_size 8 --epoch 300 --lr_schedule 150,250 --use_img_prefeat --on_the_fly --exp_name XXX --model vinet```
+    + ```python main.py --gpu 0 --dataset mit --batch_size 8 --epoch 300 --lr_schedule 150,250 --on_the_fly --exp_name XXX --transition_model deepvio```
+    + pip install tensorboardX
+    + pip install numpy-quaternion
+    + pip install transforms3d
+    + pip install sympy
+    + pip install scipy
+    + 
     + if not ```--use_img_prefeat```: train img_encoder from scratch, otherwise load optical flownet features
     + ```python main.py --gpu 0 --use_flownet FlowNet2S --prefeat_type out_conv6_1```
 2. evaluation

@@ -11,13 +11,14 @@ import shutil
 from shutil import rmtree
 import random
 
-from torch._six import int_classes as _int_classes
+#from torch._six import int_classes as _int_classes
 from torchvision import transforms
 
 from utils.mit_file_io import read_mit_pose
 from utils.mit_file_io import read_mit_img
 from utils.mit_file_io import read_mit_imu
 from utils.mit_file_io import get_mit_imgpair
+from utils.mit_file_io import get_pose_by_timestamps
 from utils.mit_file_io import get_mit_depthpair
 
 from utils.tools import get_relative_pose 
@@ -143,9 +144,9 @@ class MitStataCenterClipDataset(torch.utils.data.Dataset):
         """
         for _img in sub_seq['imgs']:
             if _img[0] not in self.loaded_imgs.keys(): # '00-000000'
-                tmp_seq = _img[0].split('-')[0] # '00'
-                tmp_idx = _img[0].split('-')[1] # '000000'
-                img_path = '{}/sequences/{}/image_2/{}.jpg'.format(self.base_dir, tmp_seq, tmp_idx)
+                tmp_seq = _img[1].split(';')[0] # '00'
+                tmp_idx = _img[1].split(';')[1] # '000000'
+                img_path = '{}/sequences/{}/rgb/{}'.format(self.base_dir, tmp_seq, tmp_idx)
                 if self.train_img_from_scratch:
                     # if train_img_from_scratch: ToTensor will transform (H,W,C) PIL image in [0,255] to (C,H,W) in [0.0,1.0] # [3, 192, 640] for kitti
                     raise NotImplementedError()
@@ -164,8 +165,8 @@ class MitStataCenterClipDataset(torch.utils.data.Dataset):
         """
         for _img in sub_seq['imgs']:
             if _img[0] not in self.loaded_depths.keys(): # '00-000000'
-                tmp_seq = _img[0].split('-')[0] # '00'
-                tmp_idx = int(_img[0].split('-')[1]) # 0
+                tmp_seq = _img[1].split(';')[0] # '00'
+                tmp_idx = _img[1].split(';')[1] # 0
                 depth_path = '{}/depths/{}/{:010d}.png'.format(self.base_dir, tmp_seq, tmp_idx)
                 # Read the depth png
                 tmp_depth = Image.open(depth_path)
@@ -197,11 +198,10 @@ class MitStataCenterClipDataset(torch.utils.data.Dataset):
         """
         tmpclip = []
         for k_seq in range(self.clip_length):
-            last_img = sub_seq['imgs'][j_seq+k_seq][0]     # '00-000000'
-            curr_img = sub_seq['imgs'][j_seq+1+k_seq][0]   # '00-000001'
-            assert int(last_img.split('-')[0]) == int(curr_img.split('-')[0]) 
-            assert int(last_img.split('-')[1]) == int(curr_img.split('-')[1]) - 1
-            img_pair = [last_img, curr_img]   # [time_0, time_1]  
+            last_img = sub_seq['imgs'][j_seq+k_seq][1]     # '00-000000'
+            curr_img = sub_seq['imgs'][j_seq+1+k_seq][1]   # '00-000001'
+            assert last_img.split(';')[0] == curr_img.split(';')[0]
+            img_pair = [last_img, curr_img]   # [time_0, time_1]
 
             tmpclip.append({
                 'img_pair':           img_pair,                               # [time_0, time_1]
@@ -218,8 +218,8 @@ class MitStataCenterClipDataset(torch.utils.data.Dataset):
         """
         get the pretrained flownet features
         """
-        assert last_ts.split('-')[0] == curr_ts.split('-')[0]
-        fseq = last_ts.split('-')[0]
+        assert last_ts.split(';')[0] == curr_ts.split(';')[0]
+        fseq = last_ts.split(';')[0]
         flabel = '{}_{}'.format(last_ts, curr_ts)
         # [1024, 5, 19]
         if self.on_the_fly:
@@ -394,6 +394,7 @@ class MitStataCenterDataset(torch.utils.data.Dataset):
             'seq'            : self.sequence,
             'seq_gt'         : self.sequence_gt
         }
+
         self.sub_seqs = self.read_data(**args_read_data)
         # self.imgs = read_kitti_img(self.base_dir, self.sequence)
     
@@ -443,8 +444,8 @@ class MitStataCenterDataset(torch.utils.data.Dataset):
 
         poses = read_mit_pose(base_dir, seq_gt)        
         timestamps, imgs = read_mit_img(base_dir, seq, poses.iloc[0]['timestamp'], poses.iloc[-1]['timestamp']) # 271
-
         imus = read_mit_imu(base_dir, seq, poses.iloc[0]['timestamp'], poses.iloc[-1]['timestamp'], timestamps) # 270
+        poses = get_pose_by_timestamps(poses, timestamps)
             
         # Each imu item is for a pair (img[0], img[1]): the imu records between the two images
         #     -> len(imgs) = len(poses) = len(imus) + 1
@@ -468,11 +469,11 @@ class MitStataCenterDataset(torch.utils.data.Dataset):
             assert imus[_i][0] == poses[_i][0]
 
             # get the translation vector of _i and _i+1
-            trans_i   = poses.iloc[_i][1][:3]
-            trans_ip1 = poses.iloc[_i+1][1][:3]
+            trans_i   = poses[_i][1][:3]
+            trans_ip1 = poses[_i+1][1][:3]
             # get the euler angles (rads) from rotation matrix of _i and _i+1
-            rot_i_euler   = poses.iloc[_i][1][-3:]
-            rot_ip1_euler = poses.iloc[_i+1][1][-3:]
+            rot_i_euler   = poses[_i][1][-3:]
+            rot_ip1_euler = poses[_i+1][1][-3:]
             rot_i_quat    = euler_to_quaternion(rot_i_euler, isRad=True)
             rot_ip1_quat  = euler_to_quaternion(rot_ip1_euler, isRad=True)
             # tq_R0 ~ tq_i, tq_R1 ~ tq_ip1
@@ -481,8 +482,8 @@ class MitStataCenterDataset(torch.utils.data.Dataset):
 
             tmp_seq['imus'].append(_imu)
             tmp_seq['imgs'].append(imgs[_i+1])
-            tmp_seq['global_poses'].append([poses.iloc[_i+1]['timestamp'], tq_ip1])
-            tmp_seq['rel_poses'].append([poses.iloc[_i+1]['timestamp'], get_relative_pose(tq_i, tq_ip1, self.t_euler_loss)])
+            tmp_seq['global_poses'].append([poses[_i+1][0], tq_ip1])
+            tmp_seq['rel_poses'].append([poses[_i+1][0], get_relative_pose(tq_i, tq_ip1, self.t_euler_loss)])
                 
         # append the last sub_seq
         if len(tmp_seq['imus']) > 0:
@@ -490,18 +491,18 @@ class MitStataCenterDataset(torch.utils.data.Dataset):
                 
         return sub_seqs
     
-def load_mit_clips(seqs=None, batch_size=None, shuffle=None, overlap=None, args=None, sample_size_ratio=None, load_kitti_rgb=False, load_kitti_depth=False):
+def load_mit_clips(seqs=None, seqs_gt=None, batch_size=None, shuffle=None, overlap=None, args=None, sample_size_ratio=None, load_mit_rgb=True, load_mit_depth=False):
     """
     -> initialize datasets of clips with specified clip_length 
     -> return: torch.utils.data.DataLoader
     """
     tmp_clips = MitStataCenterClipDataset(
         args=args, overlap=overlap, 
-        load_kitti_rgb=load_kitti_rgb,
-        load_kitti_depth=load_kitti_depth
+        load_mit_rgb=load_mit_rgb,
+        load_mit_depth=load_mit_depth
     )
-    for seq in seqs:
-        tmp_data = MitStataCenterDataset(args=args, sequence=seq)
+    for i in range(len(seqs)):
+        tmp_data = MitStataCenterDataset(args=args, sequence=seqs[i], sequence_gt=seqs_gt[i])
         tmp_clips.extend(tmp_data)
     
     # randomly reduce the sample_size to sample_size_ratio
