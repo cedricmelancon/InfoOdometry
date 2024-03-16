@@ -40,7 +40,6 @@ def train(args):
     """
     # torch.cuda.manual_seed(args.seed)
     epoch = args.epoch
-    batch = args.batch_size
     writer = SummaryWriter(log_dir='{}{}/'.format(args.tb_dir, args.exp_name))
     
     # use_imu: denote whether img and imu are used at the same time
@@ -394,23 +393,26 @@ def train(args):
             print('epoch: {:3d} | {:4d}/{} | loss: {:.5f} ({}) | time: {:.3f}s | remaining: {}'.format(epoch_idx, batch_idx, last_batch_index, total_loss.item(), loss_str, batch_timer.get_last_time_elapsed(), remain_time))
 
         # update learning rate for next epoch
-        if not args.lr_warmup: scheduler.step()
+        if not args.lr_warmup:
+            scheduler.step()
 
         # evaluate the model after training each sequence
         # if gt_last_pose is False, then zero_first must be True
-        if epoch_idx % args.eval_interval== 0:
+        if epoch_idx % args.eval_interval == 0:
             pose_model.eval()
             encoder.eval()
             transition_model.eval()
-            if observation_model:observation_model.eval()
-            if observation_imu_model: observation_imu_model.eval()
+            if observation_model:
+                observation_model.eval()
+            if observation_imu_model:
+                observation_imu_model.eval()
             
             # move eval directly here
             with torch.no_grad():
                 print('----------------------------------------')
                 batch_timer = SequenceTimer()
                 last_batch_index = len(eval_clips) - 1
-                loss_avg  = dict()
+                loss_avg = dict()
                 loss_list = ['total_loss', 'pose_trans_loss', 'pose_rot_loss']
                 if use_info:
                     loss_list += ['kl_loss']
@@ -1382,8 +1384,6 @@ def eval_with_overlap_clips(args, eval_clips, flownet_model, transition_model, u
     return msgs
 
 
-
-
 def main():
     param = Param()
     args = param.get_args()
@@ -1408,7 +1408,9 @@ if __name__ == '__main__':
     main()
     running_time = timer() - start_time
     print('==============================5==========')
-    print('total running time: {:.0f}h:{:2.0f}m:{:2.0f}s'.format(running_time//3600, (running_time%3600)//60, (running_time%60)))
+    print('total running time: {:.0f}h:{:2.0f}m:{:2.0f}s'.format(running_time // 3600,
+                                                                 (running_time % 3600) // 60,
+                                                                 (running_time % 60)))
     print('========================================')
 
 

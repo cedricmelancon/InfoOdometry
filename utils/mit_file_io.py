@@ -72,7 +72,7 @@ def read_mit_imu(base_dir, sequence, start, stop, timestamps):
     path_imu = '{}/sequences/{}/imu/'.format(base_dir, sequence)
     file = os.path.join(path_imu, "imu.txt")
     data = np.loadtxt(file)
-    data = np.delete(data, 
+    data = np.delete(data,
                      np.where((data[:, 0].astype(np.uint64) <= start) | (data[:, 0].astype(np.uint64) >= stop)), axis=0)
     imus = []
 
@@ -95,6 +95,7 @@ def get_pose_by_timestamps(poses, timestamps):
 
     return new_poses
 
+
 def get_mit_depthpair(last_img, curr_img, base_dir, render_size=None):
     """
     (1) last_img: '00-000000'
@@ -108,7 +109,7 @@ def get_mit_depthpair(last_img, curr_img, base_dir, render_size=None):
     # assert int(last_idx) + 1 == int(curr_idx)
     # last_depth_path = '{}/depths/{}/{:010d}.png'.format(base_dir, last_seq, last_idx)
     # curr_depth_path = '{}/depths/{}/{:010d}.png'.format(base_dir, curr_seq, curr_idx)
-    
+
     # assert render_size is not None
     # depth1 = Image.open(last_depth_path)
     # depth2 = Image.open(curr_depth_path)
@@ -125,27 +126,28 @@ def get_mit_depthpair(last_img, curr_img, base_dir, render_size=None):
     # return depths
     raise NotImplementedError()
 
+
 def get_mit_imgpair(last_img, curr_img, base_dir, img_transforms=None, render_size=None):
     """
     (1) last_img: '00-000000'
     (2) curr_img: '00-000001'
     """
-    if img_transforms is None and render_size is None: 
+    if img_transforms is None and render_size is None:
         raise ValueError('one and only on of img_transforms and render_size should be given')
-    if img_transforms is not None and render_size is not None: 
+    if img_transforms is not None and render_size is not None:
         raise ValueError('one and only on of img_transforms and render_size should be given')
-    
-    last_seq = last_img.split('-')[0]
-    last_filename = last_img.split('-')[1]
-    curr_seq = curr_img.split('-')[0]
-    curr_filename = curr_img.split('-')[1]
+
+    last_seq = last_img.split(';')[0]
+    last_filename = last_img.split(';')[1]
+    curr_seq = curr_img.split(';')[0]
+    curr_filename = curr_img.split(';')[1]
     assert last_seq == curr_seq
     last_img_path = '{}/sequences/{}/rgb/{}'.format(base_dir, last_seq, last_filename)
     curr_img_path = '{}/sequences/{}/rgb/{}'.format(base_dir, curr_seq, curr_filename)
 
-    if img_transforms is None and render_size is None: 
+    if img_transforms is None and render_size is None:
         raise ValueError('one and only on of img_transforms and render_size should be given')
-    if img_transforms is not None and render_size is not None: 
+    if img_transforms is not None and render_size is not None:
         raise ValueError('one and only on of img_transforms and render_size should be given')
 
     if img_transforms is None:
@@ -157,7 +159,7 @@ def get_mit_imgpair(last_img, curr_img, base_dir, img_transforms=None, render_si
         image_size = img1.shape[:2]
         cropper = StaticCenterCrop(image_size, render_size)
         images = list(map(cropper, images))
-        images = np.array(images).transpose(3,0,1,2)
+        images = np.array(images).transpose(3, 0, 1, 2)
 
         # tmp_time = timer()
         # images = images.astype(np.float32)
@@ -168,6 +170,6 @@ def get_mit_imgpair(last_img, curr_img, base_dir, img_transforms=None, render_si
         return images
     else:
         # if train_img_from_scrach: ToTensor will transform (H,W,C) PIL image in [0,255] to (C,H,W) in [0.0,1.0]
-        r_last_img = img_transforms(PIL.Image.open(last_img_path)) # [3, 192, 640] for kitti
-        r_curr_img = img_transforms(PIL.Image.open(curr_img_path)) # [3, 192, 640] for kitti
+        r_last_img = img_transforms(PIL.Image.open(last_img_path))  # [3, 192, 640] for kitti
+        r_curr_img = img_transforms(PIL.Image.open(curr_img_path))  # [3, 192, 640] for kitti
         return torch.stack((r_last_img, r_curr_img), dim=1).type(torch.FloatTensor)

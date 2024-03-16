@@ -1,5 +1,5 @@
 pytz
-torch==1.11.0
+torch==1.13.0
 tensorboard
 tensorboardX
 sympy
