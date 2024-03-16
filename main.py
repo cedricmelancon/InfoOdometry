@@ -27,6 +27,7 @@ from utils.tools import ScheduledOptim
 from utils.tools import construct_models
 
 from param import Param
+from dataset.mit_stata_center_dataset import load_mit_clips
 from dataset.euroc_dataset import load_euroc_clips
 from dataset.kitti_dataset import load_kitti_clips
 from dataset.vkitti2_dataset import load_vkitti2_clips
@@ -39,7 +40,6 @@ def train(args):
     """
     # torch.cuda.manual_seed(args.seed)
     epoch = args.epoch
-    batch = args.batch_size
     writer = SummaryWriter(log_dir='{}{}/'.format(args.tb_dir, args.exp_name))
     
     # use_imu: denote whether img and imu are used at the same time
@@ -50,7 +50,7 @@ def train(args):
         assert args.finetune
         print("=> only finetune pose_model, while fixing encoder and transition_model")
     if args.finetune:
-        assert args.load_model is not "none"
+        assert args.load_model != "none"
 
     if args.finetune_only_decoder:
         param_list = list(pose_model.parameters())
@@ -75,7 +75,7 @@ def train(args):
             raise ValueError('optimizer {} is currently not supported'.format(args.optimizer))
     
     # NOTE: Load prev ckp after we have specified optimizer 
-    if args.load_model is not "none":
+    if args.load_model != "none":
         assert os.path.exists(args.load_model)
         print("=> loading previous trained model: {}".format(args.load_model))
         model_dicts = torch.load(args.load_model, map_location="cuda:0")
@@ -164,6 +164,26 @@ def train(args):
             vkitti2_clone_only = args.vkitti2_clone_only,
             t_euler_loss=args.t_euler_loss,
             subscene = args.vkitti2_eval_subscene
+        )
+    elif args.dataset == "mit":
+        train_clips = load_mit_clips(
+            seqs = args.train_sequences,
+            seqs_gt = args.train_sequences_gt,
+            batch_size = args.batch_size,
+            shuffle = True,
+            overlap = args.clip_overlap,
+            args = args,
+            sample_size_ratio = args.sample_size_ratio
+        )
+
+        eval_clips = load_mit_clips(
+            seqs = args.eval_sequences,
+            seqs_gt=args.eval_sequences_gt,
+            batch_size = args.eval_batch_size,
+            shuffle = False,
+            overlap = False,
+            args = args,
+            sample_size_ratio = 1.
         )
 
     else:
@@ -373,23 +393,26 @@ def train(args):
             print('epoch: {:3d} | {:4d}/{} | loss: {:.5f} ({}) | time: {:.3f}s | remaining: {}'.format(epoch_idx, batch_idx, last_batch_index, total_loss.item(), loss_str, batch_timer.get_last_time_elapsed(), remain_time))
 
         # update learning rate for next epoch
-        if not args.lr_warmup: scheduler.step()
+        if not args.lr_warmup:
+            scheduler.step()
 
         # evaluate the model after training each sequence
         # if gt_last_pose is False, then zero_first must be True
-        if epoch_idx % args.eval_interval== 0:
+        if epoch_idx % args.eval_interval == 0:
             pose_model.eval()
             encoder.eval()
             transition_model.eval()
-            if observation_model:observation_model.eval()
-            if observation_imu_model: observation_imu_model.eval()
+            if observation_model:
+                observation_model.eval()
+            if observation_imu_model:
+                observation_imu_model.eval()
             
             # move eval directly here
             with torch.no_grad():
                 print('----------------------------------------')
                 batch_timer = SequenceTimer()
                 last_batch_index = len(eval_clips) - 1
-                loss_avg  = dict()
+                loss_avg = dict()
                 loss_list = ['total_loss', 'pose_trans_loss', 'pose_rot_loss']
                 if use_info:
                     loss_list += ['kl_loss']
@@ -1361,8 +1384,6 @@ def eval_with_overlap_clips(args, eval_clips, flownet_model, transition_model, u
     return msgs
 
 
-
-
 def main():
     param = Param()
     args = param.get_args()
@@ -1387,7 +1408,9 @@ if __name__ == '__main__':
     main()
     running_time = timer() - start_time
     print('==============================5==========')
-    print('total running time: {:.0f}h:{:2.0f}m:{:2.0f}s'.format(running_time//3600, (running_time%3600)//60, (running_time%60)))
+    print('total running time: {:.0f}h:{:2.0f}m:{:2.0f}s'.format(running_time // 3600,
+                                                                 (running_time % 3600) // 60,
+                                                                 (running_time % 60)))
     print('========================================')
 
 

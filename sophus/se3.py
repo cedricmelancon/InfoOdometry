@@ -23,13 +23,14 @@ class Se3:
         """ exponential map """
         upsilon = v[0:3, :]
         omega = sophus.Vector3(v[3], v[4], v[5])
+
         so3 = sophus.So3.exp(omega)
         Omega = sophus.So3.hat(omega)
         Omega_sq = Omega * Omega
         theta = sympy.sqrt(sophus.squared_norm(omega))
         V = (sympy.Matrix.eye(3) +
-             (1 - sympy.cos(theta)) / (theta**2) * Omega +
-             (theta - sympy.sin(theta)) / (theta**3) * Omega_sq)
+             (1 - sympy.cos(theta)) / (theta ** 2) * Omega +
+             (theta - sympy.sin(theta)) / (theta ** 3) * Omega_sq)
         return Se3(so3, V * upsilon)
 
     def log(self):
@@ -43,8 +44,8 @@ class Se3:
         half_theta = 0.5 * theta
 
         V_inv = sympy.Matrix.eye(3) - 0.5 * Omega + (1 - theta * sympy.cos(
-            half_theta) / (2 * sympy.sin(half_theta))) / (theta * theta) *\
-            (Omega * Omega)
+            half_theta) / (2 * sympy.sin(half_theta))) / (theta * theta) * \
+                (Omega * Omega)
         upsilon = V_inv * self.t
         return upsilon.col_join(omega)
 
@@ -61,22 +62,21 @@ class Se3:
         """ returns 4x4-matrix representation ``Omega`` """
         upsilon = sophus.Vector3(v[0], v[1], v[2])
         omega = sophus.Vector3(v[3], v[4], v[5])
-        return sophus.So3.hat(omega).\
-            row_join(upsilon).\
+        return sophus.So3.hat(omega). \
+            row_join(upsilon). \
             col_join(sympy.Matrix.zeros(1, 4))
-    
+
     @staticmethod
     def vee(Omega):
         """ R^4x4 => R^6 """
         """ returns 6-vector representation of Lie algebra """
         """ This is the inverse of the hat-operator """
-        
-        head = sophus.Vector3(Omega[0,3], Omega[1,3], Omega[2,3])
-        tail = sophus.So3.vee(Omega[0:3,0:3])
+
+        head = sophus.Vector3(Omega[0, 3], Omega[1, 3], Omega[2, 3])
+        tail = sophus.So3.vee(Omega[0:3, 0:3])
         upsilon_omega = \
             sophus.Vector6(head[0], head[1], head[2], tail[0], tail[1], tail[2])
         return upsilon_omega
-            
 
     def matrix(self):
         """ returns matrix representation """
@@ -106,7 +106,7 @@ class Se3:
     @staticmethod
     def calc_Dx_exp_x(x):
         return sympy.Matrix(7, 6, lambda r, c:
-                            sympy.diff(Se3.exp(x)[r], x[c]))
+        sympy.diff(Se3.exp(x)[r], x[c]))
 
     @staticmethod
     def Dx_exp_x_at_0():
@@ -121,20 +121,20 @@ class Se3:
     def calc_Dx_this_mul_exp_x_at_0(self, x):
         v = Se3.exp(x)
         return sympy.Matrix(7, 6, lambda r, c:
-                            sympy.diff((self * Se3.exp(x))[r], x[c])). \
-            subs(x[0], 0).subs(x[1], 0).subs(x[2], 0).\
+        sympy.diff((self * Se3.exp(x))[r], x[c])). \
+            subs(x[0], 0).subs(x[1], 0).subs(x[2], 0). \
             subs(x[3], 0).subs(x[4], 0).limit(x[5], 0)
 
     @staticmethod
     def calc_Dx_exp_x_at_0(x):
-        return Se3.calc_Dx_exp_x(x).subs(x[0], 0).subs(x[1], 0).subs(x[2], 0).\
+        return Se3.calc_Dx_exp_x(x).subs(x[0], 0).subs(x[1], 0).subs(x[2], 0). \
             subs(x[3], 0).subs(x[4], 0).limit(x[5], 0)
 
     @staticmethod
     def Dxi_x_matrix(x, i):
         if i < 4:
-            return sophus.So3.Dxi_x_matrix(x, i).\
-                row_join(sympy.Matrix.zeros(3, 1)).\
+            return sophus.So3.Dxi_x_matrix(x, i). \
+                row_join(sympy.Matrix.zeros(3, 1)). \
                 col_join(sympy.Matrix.zeros(1, 4))
         M = sympy.Matrix.zeros(4, 4)
         M[i - 4, 3] = 1
@@ -143,7 +143,7 @@ class Se3:
     @staticmethod
     def calc_Dxi_x_matrix(x, i):
         return sympy.Matrix(4, 4, lambda r, c:
-                            sympy.diff(x.matrix()[r, c], x[i]))
+        sympy.diff(x.matrix()[r, c], x[i]))
 
     @staticmethod
     def Dxi_exp_x_matrix(x, i):
@@ -155,7 +155,7 @@ class Se3:
     @staticmethod
     def calc_Dxi_exp_x_matrix(x, i):
         return sympy.Matrix(4, 4, lambda r, c:
-                            sympy.diff(Se3.exp(x).matrix()[r, c], x[i]))
+        sympy.diff(Se3.exp(x).matrix()[r, c], x[i]))
 
     @staticmethod
     def Dxi_exp_x_matrix_at_0(i):
@@ -166,8 +166,8 @@ class Se3:
     @staticmethod
     def calc_Dxi_exp_x_matrix_at_0(x, i):
         return sympy.Matrix(4, 4, lambda r, c:
-                            sympy.diff(Se3.exp(x).matrix()[r, c], x[i])
-                            ).subs(x[0], 0).subs(x[1], 0).subs(x[2], 0).\
+        sympy.diff(Se3.exp(x).matrix()[r, c], x[i])
+                            ).subs(x[0], 0).subs(x[1], 0).subs(x[2], 0). \
             subs(x[3], 0).subs(x[4], 0).limit(x[5], 0)
 
 
