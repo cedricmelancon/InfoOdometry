@@ -8,7 +8,7 @@
     //"workspaceMount": "source=${localWorkspaceFolder}/Localization,target=/workspace/,type=bind",
 	//"workspaceFolder": "/workspace/",
 	"mounts": [
-		"source=c:\\dev\\ETS\\data,target=/data/,type=bind,consistency=cached"
+		"source=c:\\dev\\data,target=/data/,type=bind,consistency=cached"
 	],
 	//"customizations": {
 	//	"vscode": {
