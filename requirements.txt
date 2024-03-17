@@ -17,4 +17,7 @@ cffi
 pillow
 pyquaternion
 quaternion
-transform3d
+transforms3d
+torchvision==0.14.0
+pandas
+matplotlib
