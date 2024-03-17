@@ -152,9 +152,9 @@ class Param:
                                  help="Load 10/100Hz and interpolate the predicted pose to 20/200Hz")
 
         # args for directories of ckp and tb
-        self.parser.add_argument('--exp_name', type=str, default='tmp')
-        self.parser.add_argument('--ckp_dir', type=str, default='ckp/')
-        self.parser.add_argument('--tb_dir', type=str, default='tb_dir/')
+        self.parser.add_argument('--exp_name', type=str, default='/data/results/tmp')
+        self.parser.add_argument('--ckp_dir', type=str, default='/data/results/ckp/')
+        self.parser.add_argument('--tb_dir', type=str, default='/data/results/tb_dir/')
 
         # args with store_const type
         self.parser.add_argument('--eval', action='store_const', default=False, const=True, help='eval')
