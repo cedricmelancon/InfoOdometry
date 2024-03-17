@@ -331,7 +331,7 @@ def construct_models(args):
             flownet_model = FlowNet2C(args).to(device=args.device)
         else:
             raise ValueError('--flownet_model: {} is not supported'.format(args.flownet_model))
-        resume_ckp = '/IdeaProjects/InfoOdometry/ckp/pretrained_flownet/{}_checkpoint.pth.tar'.format(
+        resume_ckp = '/data/results/ckp/pretrained_flownet/{}_checkpoint.pth.tar'.format(
             args.flownet_model)
         flow_ckp = torch.load(resume_ckp)
         flownet_model.load_state_dict(flow_ckp['state_dict'])
