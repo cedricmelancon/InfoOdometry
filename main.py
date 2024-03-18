@@ -5,8 +5,9 @@ from torch.distributions import Normal
 from torch.distributions.kl import kl_divergence
 import torch.utils.data
 import torch.optim as optim
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
 from tensorboardX import SummaryWriter
+import csv
 from timeit import default_timer as timer
 from tqdm import tqdm
 
@@ -21,6 +22,9 @@ from utils.tools import euler_to_quaternion
 from utils.tools import RunningAverager
 from utils.tools import save_model
 from utils.tools import eval_rel_error
+from utils.tools import get_absolute_pose
+from utils.tools import eval_global_error
+from utils.tools import get_transform
 from utils.tools import get_lr
 from utils.tools import factor_lr_schedule
 from utils.tools import ScheduledOptim
@@ -34,6 +38,16 @@ from dataset.vkitti2_dataset import load_vkitti2_clips
 from info_model import bottle
 
 
+def save_data(writer, loss, labels_global, labels_delta, pred_rel, pred_abs, epoch, n_iter):
+    row = np.concatenate((np.array([epoch, n_iter]),
+                          loss.cpu().detach().numpy(),
+                          labels_global.cpu().detach().numpy()[-1, :],
+                          labels_delta.cpu().detach().numpy()[-1, :],
+                          pred_rel.cpu().detach().numpy()[-1, :],
+                          pred_abs.cpu().detach().numpy()[-1, :]), axis=None)
+    writer.writerow(row)
+
+
 def train(args):
     """
     args: see param.py for details
@@ -41,6 +55,8 @@ def train(args):
     # torch.cuda.manual_seed(args.seed)
     epoch = args.epoch
     writer = SummaryWriter(log_dir='{}{}/'.format(args.tb_dir, args.exp_name))
+    eval_csvfile = open(f'{args.tb_dir}/{args.exp_name}/test_data.csv', 'w', newline='')
+    eval_csvwriter = csv.writer(eval_csvfile, delimiter=' ')
     
     # use_imu: denote whether img and imu are used at the same time
     # args.imu_only: denote only imu is used
@@ -96,8 +112,9 @@ def train(args):
         free_nats = torch.full((1, ), args.free_nats, device=args.device) # allowed deviation in kl divergence
     
     if not args.lr_warmup:
-        lmbda = lambda epoch: factor_lr_schedule(epoch, divide_epochs=args.lr_schedule, lr_factors=args.lr_factor)
-        scheduler = LambdaLR(optimizer, lr_lambda=lmbda)
+        #lmbda = lambda epoch: factor_lr_schedule(epoch, divide_epochs=args.lr_schedule, lr_factors=args.lr_factor)
+        #scheduler = LambdaLR(optimizer, lr_lambda=lmbda)
+        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, threshold=0.0001, threshold_mode='abs')
 
     # initialize datasets and data loaders
 
@@ -167,23 +184,23 @@ def train(args):
         )
     elif args.dataset == "mit":
         train_clips = load_mit_clips(
-            seqs = args.train_sequences,
-            seqs_gt = args.train_sequences_gt,
-            batch_size = args.batch_size,
-            shuffle = True,
-            overlap = args.clip_overlap,
-            args = args,
-            sample_size_ratio = args.sample_size_ratio
+            seqs=args.train_sequences,
+            seqs_gt=args.train_sequences_gt,
+            batch_size=args.batch_size,
+            shuffle=True,
+            overlap=args.clip_overlap,
+            args=args,
+            sample_size_ratio=args.sample_size_ratio
         )
 
         eval_clips = load_mit_clips(
-            seqs = args.eval_sequences,
+            seqs=args.eval_sequences,
             seqs_gt=args.eval_sequences_gt,
-            batch_size = args.eval_batch_size,
-            shuffle = False,
-            overlap = False,
-            args = args,
-            sample_size_ratio = 1.
+            batch_size=args.eval_batch_size,
+            shuffle=False,
+            overlap=True,
+            args=args,
+            sample_size_ratio=1.
         )
 
     else:
@@ -208,6 +225,8 @@ def train(args):
         print('-----------------------------------------')
         print('starting epoch {}...'.format(epoch_idx))
         print('learning rate: {:.6f}'.format(get_lr(optimizer)))
+        writer.add_scalar('general/learning_rate', get_lr(optimizer), epoch_idx)
+
         pose_model.train()
         if args.finetune_only_decoder:
             encoder.eval()
@@ -229,6 +248,7 @@ def train(args):
         last_batch_index = len(train_clips) - 1
         for batch_idx, batch_data in enumerate(train_clips):
             if args.debug and batch_idx >= 10: break
+
             # x_img_list:                length-5 list with component [batch, 3, 2, H, W]
             # x_imu_list:                length-5 list with component [batch, 11, 6]
             # x_last_rel_pose_list:      length-5 list with component [batch, 6]    # se3 or t_euler (--t_euler_loss)
@@ -312,9 +332,13 @@ def train(args):
                         elif args.rec_type == 'prior':
                             pred_observations = bottle(observation_model, (beliefs_visual, prior_states, )) 
                     if args.rec_loss == 'sum':
-                        observation_loss = F.mse_loss(pred_observations, observations, reduction='none').sum(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        # observation_loss = F.mse_loss(pred_observations, observations, reduction='none').sum(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        observation_loss = F.l1_loss(pred_observations, observations, reduction='none').sum(
+                            dim=2).mean(dim=(0, 1))  # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
                     elif args.rec_loss == 'mean':
-                        observation_loss = F.mse_loss(pred_observations, observations, reduction='none').mean(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        # observation_loss = F.mse_loss(pred_observations, observations, reduction='none').mean(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        observation_loss = F.l1_loss(pred_observations, observations, reduction='none').mean(
+                            dim=2).mean(dim=(0, 1))  # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
                     observation_loss = args.observation_beta * observation_loss
             
                 # observation reconstruction for imus
@@ -331,9 +355,17 @@ def train(args):
                         elif args.rec_type == 'prior':
                             pred_imu_observations = bottle(observation_imu_model, (beliefs[1], prior_states, )) 
                     if args.rec_loss == 'sum':
-                        observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').sum(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        # observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').sum(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        observation_imu_loss = F.l1_loss(pred_imu_observations,
+                                                          x_imu_seqs.view(pred_imu_observations.size()),
+                                                          reduction='none').sum(dim=2).mean(
+                            dim=(0, 1))  # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
                     elif args.rec_loss == 'mean':
-                        observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').mean(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        # observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').mean(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        observation_imu_loss = F.l1_loss(pred_imu_observations,
+                                                          x_imu_seqs.view(pred_imu_observations.size()),
+                                                          reduction='none').mean(dim=2).mean(
+                            dim=(0, 1))  # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
                     observation_imu_loss = args.observation_imu_beta * observation_imu_loss
                     
                 if args.kl_free_nats == 'none':
@@ -357,8 +389,12 @@ def train(args):
             
             
             pred_rel_poses = bottle(pose_model, (posterior_states, ))
-            pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:3], y_rel_poses[:,:,:3], reduction='none').sum(dim=2).mean(dim=(0,1)) 
-            pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,3:], y_rel_poses[:,:,3:], reduction='none').sum(dim=2).mean(dim=(0,1)) 
+            # pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:3], y_rel_poses[:,:,:3], reduction='none').sum(dim=2).mean(dim=(0,1))
+            pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3], y_rel_poses[:, :, :3],
+                                                                   reduction='none').sum(dim=2).mean(dim=(0, 1))
+            # pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,3:], y_rel_poses[:,:,3:], reduction='none').sum(dim=2).mean(dim=(0,1))
+            pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, 3:], y_rel_poses[:, :, 3:],
+                                                              reduction='none').sum(dim=2).mean(dim=(0, 1))
             
             total_loss = pose_trans_loss + pose_rot_loss
             if use_info:
@@ -392,10 +428,6 @@ def train(args):
                 if args.observation_beta != 0: loss_str = '{:.5f}+{}'.format(observation_loss.item(), loss_str)
             print('epoch: {:3d} | {:4d}/{} | loss: {:.5f} ({}) | time: {:.3f}s | remaining: {}'.format(epoch_idx, batch_idx, last_batch_index, total_loss.item(), loss_str, batch_timer.get_last_time_elapsed(), remain_time))
 
-        # update learning rate for next epoch
-        if not args.lr_warmup:
-            scheduler.step()
-
         # evaluate the model after training each sequence
         # if gt_last_pose is False, then zero_first must be True
         if epoch_idx % args.eval_interval == 0:
@@ -414,6 +446,8 @@ def train(args):
                 last_batch_index = len(eval_clips) - 1
                 loss_avg = dict()
                 loss_list = ['total_loss', 'pose_trans_loss', 'pose_rot_loss']
+                last_pose = None
+
                 if use_info:
                     loss_list += ['kl_loss']
                     if args.observation_beta != 0: loss_list += ['observation_visual_loss']
@@ -425,11 +459,18 @@ def train(args):
                     for _suf in ['_all', '_trans', '_rot_axis', '_rot_euler']:
                         list_eval['{}{}'.format(_met, _suf)] = []
                 for batch_idx, batch_data in enumerate(eval_clips):
-                    if args.debug and batch_idx >= 10: break
+                    if args.debug and batch_idx >= 10:
+                        break
+
                     x_img_list, x_imu_list, x_last_rel_pose_list, y_rel_pose_list, y_last_global_pose_list, y_global_pose_list, _, _ = batch_data
-                    
+
                     x_img_pairs = torch.stack(x_img_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 3, 2, H, W]
                     y_rel_poses = torch.stack(y_rel_pose_list, dim=0).type(torch.FloatTensor).to(device=args.device)
+                    y_glob_poses = torch.stack(y_last_global_pose_list, dim=0).type(torch.FloatTensor).to(device=args.device)
+
+                    if last_pose is None:
+                        last_pose = get_transform(y_glob_poses[0])
+
                     if use_imu or args.imu_only: 
                         x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=args.device)
                     running_eval_batch_size = x_img_pairs.size()[1] # might be different at the last batch
@@ -463,9 +504,13 @@ def train(args):
                             elif args.rec_type == 'prior':
                                 pred_observations = bottle(observation_model, (beliefs_visual, prior_states, ))
                             if args.rec_loss == 'sum': 
-                                observation_loss = F.mse_loss(pred_observations, observations, reduction='none').sum(dim=2).mean(dim=(0,1)) 
+                                # observation_loss = F.mse_loss(pred_observations, observations, reduction='none').sum(dim=2).mean(dim=(0,1))
+                                observation_loss = F.l1_loss(pred_observations, observations, reduction='none').sum(
+                                    dim=2).mean(dim=(0, 1))
                             elif args.rec_loss == 'mean':
-                                observation_loss = F.mse_loss(pred_observations, observations, reduction='none').mean(dim=2).mean(dim=(0,1)) 
+                                # observation_loss = F.mse_loss(pred_observations, observations, reduction='none').mean(dim=2).mean(dim=(0,1))
+                                observation_loss = F.l1_loss(pred_observations, observations, reduction='none').mean(
+                                    dim=2).mean(dim=(0, 1))
                             # observation_loss = args.observation_beta * observation_loss
                         
                         if use_imu and args.observation_imu_beta != 0:
@@ -474,9 +519,15 @@ def train(args):
                             elif args.rec_type == 'prior':
                                 pred_imu_observations = bottle(observation_imu_model, (beliefs[1], prior_states, ))
                             if args.rec_loss == 'sum':
-                                observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').sum(dim=2).mean(dim=(0,1)) 
+                                # observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').sum(dim=2).mean(dim=(0,1))
+                                observation_imu_loss = F.l1_loss(pred_imu_observations,
+                                                                  x_imu_seqs.view(pred_imu_observations.size()),
+                                                                  reduction='none').sum(dim=2).mean(dim=(0, 1))
                             elif args.rec_loss == 'mean':
-                                observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').mean(dim=2).mean(dim=(0,1)) 
+                                # observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').mean(dim=2).mean(dim=(0,1))
+                                observation_imu_loss = F.l1_loss(pred_imu_observations,
+                                                                  x_imu_seqs.view(pred_imu_observations.size()),
+                                                                  reduction='none').mean(dim=2).mean(dim=(0, 1))
                             # observation_imu_loss = args.observation_imu_beta * observation_imu_loss
                         
                         kl_loss = kl_divergence(Normal(posterior_means, posterior_std_devs), Normal(prior_means, prior_std_devs)).sum(dim=2).mean(dim=(0,1))
@@ -490,9 +541,14 @@ def train(args):
                                 # kl_loss += args.global_kl_beta * kl_divergence(Normal(posterior_means, posterior_std_devs), tmp_global_prior).sum(dim=2).mean(dim=(0,1))
                                 kl_loss += kl_divergence(Normal(posterior_means, posterior_std_devs), tmp_global_prior).sum(dim=2).mean(dim=(0,1))
                     
-                    pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:3], y_rel_poses[:,:,:3], reduction='none').sum(dim=2).mean(dim=(0,1))
-                    pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,3:], y_rel_poses[:,:,3:], reduction='none').sum(dim=2).mean(dim=(0,1))
-                    
+                    # pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:3], y_rel_poses[:,:,:3], reduction='none').sum(dim=2).mean(dim=(0,1))
+                    pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3],
+                                                                           y_rel_poses[:, :, :3], reduction='none').sum(
+                        dim=2).mean(dim=(0, 1))
+                    # pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,3:], y_rel_poses[:,:,3:], reduction='none').sum(dim=2).mean(dim=(0,1))
+                    pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, 3:], y_rel_poses[:, :, 3:],
+                                                                      reduction='none').sum(dim=2).mean(dim=(0, 1))
+
                     total_loss = pose_trans_loss + pose_rot_loss
                     if use_info:
                         total_loss += kl_loss
@@ -512,7 +568,16 @@ def train(args):
                         eval_rel = eval_rel_error(pred_rel_poses[_fidx], y_rel_poses[_fidx], t_euler_loss=args.t_euler_loss)
                         for _met in ['rpe_all', 'rpe_trans', 'rpe_rot_axis', 'rpe_rot_euler']:
                             list_eval[_met].extend(eval_rel[_met])
-                    
+
+                    new_pose = get_absolute_pose(pred_rel_poses, last_pose).unsqueeze(1)
+                    eval_glob = eval_global_error(new_pose, torch.stack(y_global_pose_list, 0))
+
+                    for _met in ['pred_x', 'pred_y', 'pred_theta', 'gt_x', 'gt_y', 'gt_theta', 'gpe_x', 'gpe_y', 'gpe_theta']:
+                        writer.add_scalar(f'test/{_met}', eval_glob[_met], batch_idx)
+
+                    save_data(eval_csvwriter, total_loss, y_glob_poses, y_rel_poses, new_pose, pred_rel_poses, epoch_idx, batch_idx)
+                    last_pose = new_pose[1]
+
                     batch_timer.tictoc()
                     remain_time = batch_timer.get_remaining_time(batch_idx, last_batch_index)
                     remain_time = '{:.0f}h:{:2.0f}m:{:2.0f}s'.format(remain_time//3600, (remain_time%3600)//60, (remain_time%60))
@@ -527,14 +592,18 @@ def train(args):
             out_eval = dict()
             for _loss in loss_list:
                 out_eval[_loss] = loss_avg[_loss].item()
-                writer.add_scalar('eval/{}'.format(_loss), out_eval[_loss], curr_iter)
+                writer.add_scalar('eval/{}'.format(_loss), out_eval[_loss], epoch_idx)
             out_eval['rpe_rot_axis'] = np.mean(np.array(list_eval['rpe_rot_axis']))
-            writer.add_scalar('eval_sqrt_then_avg/rpe_rot_axis', out_eval['rpe_rot_axis'], curr_iter)
+            writer.add_scalar('eval_sqrt_then_avg/rpe_rot_axis', out_eval['rpe_rot_axis'], epoch_idx)
             for _met in ['rpe_all', 'rpe_trans', 'rpe_rot_euler']:
                 out_eval[_met] = dict()
                 # out_eval[_met]['avg_then_sqrt'] = np.sqrt(np.mean(np.array(list_eval[_met])))
                 out_eval[_met]['sqrt_then_avg'] = np.mean(np.sqrt(np.array(list_eval[_met])))
-                writer.add_scalar('eval_sqrt_then_avg/{}'.format(_met), out_eval[_met]['sqrt_then_avg'], curr_iter)
+                writer.add_scalar('eval_sqrt_then_avg/{}'.format(_met), out_eval[_met]['sqrt_then_avg'], epoch_idx)
+
+            # update learning rate for next epoch
+            if not args.lr_warmup:
+                scheduler.step(loss_avg['total_loss'].item())
 
             check_str = '{}{}/ckp_latest.pt'.format(args.ckp_dir, args.exp_name)
             save_args = {
@@ -839,7 +908,7 @@ def eval_with_clips(args, eval_clips, flownet_model, transition_model, use_imu, 
         for batch_idx, batch_data in enumerate(eval_clips):
             if args.debug and batch_idx >= 10: break
             
-            x_img_list, x_imu_list, x_last_rel_pose_list, y_rel_pose_list, y_last_global_pose_list, y_global_pose_list, _, _ = batch_data    
+            x_img_list, x_imu_list, x_last_rel_pose_list, y_rel_pose_list, y_last_global_pose_list, y_global_pose_list, _, _ = batch_data
 
             x_img_pairs = torch.stack(x_img_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [t, batch, 3, 2, H, W]
             y_rel_poses = torch.stack(y_rel_pose_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [t, batch, 6]

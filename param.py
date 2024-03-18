@@ -18,7 +18,7 @@ class Param:
         self.parser.add_argument('--img_prefeat', type=str, default='none',
                                  help='none, flownet or resnet (not implemented yet)')
         self.parser.add_argument('--failure_type', type=str, default='noise', help='noise, missing, mixed or none')
-        self.parser.add_argument('--sample_size_ratio', type=float, default=0.4,
+        self.parser.add_argument('--sample_size_ratio', type=float, default=0.6,
                                  help='the ratio of total non-overlapped clips (1) only take effect in (0,1) (2) only used in training')
         self.parser.add_argument('--imu_only', action='store_const', default=False, const=True,
                                  help='need to be used with --transition_model double')
@@ -123,7 +123,7 @@ class Param:
         self.parser.add_argument('--pose_tiles', type=int, default=10,
                                  help='the tile number of previous poses of last timestamp')
         self.parser.add_argument('--rgb_maxrgb_max', type=float, default=255., help='the max value of image data')
-        self.parser.add_argument('--eval_interval', type=int, default=5,
+        self.parser.add_argument('--eval_interval', type=int, default=1,
                                  help='the frequency (by epoch) to eval and save the ckp')
 
         # args for dataset

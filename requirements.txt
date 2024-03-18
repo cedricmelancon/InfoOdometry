@@ -21,3 +21,4 @@ transforms3d
 torchvision==0.14.0
 pandas
 matplotlib
+pytorch3d

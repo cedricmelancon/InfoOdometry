@@ -23,6 +23,8 @@ from info_model import Encoder
 from flownet_model import FlowNet2
 from flownet_model import FlowNet2C
 from flownet_model import FlowNet2S
+from pytorch3d.transforms import euler_angles_to_matrix, matrix_to_euler_angles, quaternion_to_matrix
+from scipy.spatial.transform import Rotation as R
 
 
 class ScheduledOptim():
@@ -460,6 +462,87 @@ def eval_rel_error(pred_rel_pose, gt_rel_pose, t_euler_loss):
     return eval_rel
 
 
+def get_transform(state):
+    state = state.unsqueeze(0)
+    rot_matrix = quaternion_to_matrix(state[:, :, -4:])
+    euler_state = matrix_to_euler_angles(rot_matrix, 'ZYX')
+    result = torch.concat((state[:, :, :3], euler_state), 2)
+    return result
+
+
+def get_absolute_pose(dt, state):
+        clip_size = dt.size()[0]
+        result = [torch.empty(0)] * clip_size
+
+        last_state = state
+
+        for i in range(clip_size):
+            if i > 0:
+                last_state = result[i - 1].unsqueeze(0)
+
+            trans_state = last_state[:, :, :3]
+            euler_state = last_state[:, :, -3:]
+
+            rotation_state = euler_angles_to_matrix(euler_state, 'ZYX')
+
+            transform_state = torch.zeros(4, 4, device='cuda:0')
+            transform_state[:3, :3] = rotation_state
+            transform_state[:3, 3] = trans_state
+            transform_state[3, 3] = 1.0
+
+            delta_trans = dt[i, :, :3].squeeze(1)
+            delta_euler = dt[i, :, -3:].squeeze(1)
+            rotation_dt = euler_angles_to_matrix(delta_euler, 'ZYX')
+
+            transform_dt = torch.zeros(4, 4, device='cuda:0')
+            transform_dt[:3, :3] = rotation_dt
+            transform_dt[:3, 3] = delta_trans
+            transform_dt[3, 3] = 1.0
+
+            transform_result = torch.mm(transform_state, transform_dt)
+
+            euler_result = matrix_to_euler_angles(transform_result[:3, :3], 'ZYX')
+            trans_result = transform_result[:3, 3]
+            euler_result[0] = 0.0
+            euler_result[1] = 0.0
+            trans_result[2] = 0.0
+
+            result[i] = torch.concat((trans_result, euler_result), 0).unsqueeze(0)
+
+        return torch.stack(result, dim=0)
+
+
+def get_relative_pose_from_transform(t1, t2):
+    trans_t1 = t1[:3]
+    euler_t1 = t1[-3:]
+
+    rotation_t1 = R.from_euler('zyx', euler_t1).as_matrix()
+
+    transform_t1 = np.zeros((4, 4))
+    transform_t1[:3, :3] = rotation_t1
+    transform_t1[:3, 3] = trans_t1
+    transform_t1[3, 3] = 1.0
+
+    trans_t2 = t2[:3]
+    euler_t2 = t2[-3:]
+
+    rotation_t2 = R.from_euler('zyx', euler_t2).as_matrix()
+
+    transform_t2 = np.zeros((4, 4))
+    transform_t2[:3, :3] = rotation_t2
+    transform_t2[:3, 3] = trans_t2
+    transform_t2[3, 3] = 1.0
+
+    transform_result = np.dot(np.linalg.inv(transform_t1), transform_t2)
+    euler_result = R.from_matrix(transform_result[:3, :3]).as_euler('zyx')
+    trans_result = transform_result[:3, 3]
+    euler_result[0] = 0.0
+    euler_result[1] = 0.0
+    trans_result[2] = 0.0
+
+    return np.concatenate((trans_result, euler_result), 0)
+
+
 def eval_global_error(accu_global_pose, gt_global_pose):
     """
     input: (list -> batch)
@@ -474,32 +557,27 @@ def eval_global_error(accu_global_pose, gt_global_pose):
     -> v2: from ||t-t'||, ||r-r'|| (disabled)
     """
     assert len(accu_global_pose) == len(gt_global_pose)
-    batch_size = len(accu_global_pose)
+    clip_size = accu_global_pose.shape[0]
 
     eval_global = dict()
-    for _metric in ['ate_all', 'ate_trans', 'ate_rot_axis', 'ate_rot_euler']:
+    for _metric in ['pred_x', 'pred_y', 'pred_theta', 'gt_x', 'gt_y', 'gt_theta', 'gpe_x', 'gpe_y', 'gpe_theta']:
         eval_global[_metric] = []
 
-    for _i in range(batch_size):
-        T_R1_pred = accu_global_pose[_i]
-        T_R1_gt = pose_tq_to_se(gt_global_pose[_i], return_obj=True)
+    pred = accu_global_pose[-1].squeeze(0).squeeze(0).cpu().numpy()
+    gt = get_transform(gt_global_pose[-1]).squeeze(0).squeeze(0).cpu().numpy()
+    dt = get_relative_pose_from_transform(pred, gt)
 
-        ## calculate v1: from TT'
-        T_R1_rel = T_R1_gt.inverse() * T_R1_pred
-        tmp_ate_all = np.sum(np.array(T_R1_rel.log(), dtype=float) ** 2)  # (4.46) in SLAM12
-        tmp_ate_trans = np.sum(np.array(T_R1_rel.t, dtype=float) ** 2)  # (4.47) in SLAM12
-        eval_global['ate_all'].append(np.array(tmp_ate_all))
-        eval_global['ate_trans'].append(np.array(tmp_ate_trans))
+    eval_global['pred_x'].append(pred[0])
+    eval_global['pred_y'].append(pred[1])
+    eval_global['pred_theta'].append(pred[5])
 
-        axis_R1_rel = np.linalg.norm(np.array(T_R1_rel.so3.log(), dtype=float))
-        axis_R1_rel = axis_R1_rel / np.pi * 180  # transform to degrees
-        eval_global['ate_rot_axis'].append(np.array(axis_R1_rel))
+    eval_global['gt_x'].append(gt[0])
+    eval_global['gt_y'].append(gt[1])
+    eval_global['gt_theta'].append(gt[5])
 
-        euler_R1_rel = np.array(T_R1_rel.so3.matrix(), dtype=float)
-        euler_R1_rel = rotationMatrixToEulerAngles(euler_R1_rel)
-        euler_R1_rel = euler_R1_rel / np.pi * 180  # transform to degrees
-        tmp_euler = np.sum(euler_R1_rel ** 2)
-        eval_global['ate_rot_euler'].append(tmp_euler)
+    eval_global['gpe_x'].append(dt[0])
+    eval_global['gpe_y'].append(dt[1])
+    eval_global['gpe_theta'].append(dt[5])
 
     # each value in eval_global: a list with length eval_batch_size
     return eval_global
