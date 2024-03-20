@@ -105,44 +105,75 @@ class RunningAverager:
         return self.cnt
 
 
-def get_relative_pose(tq_R0, tq_R1, t_euler_loss=False):
-    """
-    input: T_R0, T_R1: (translation, quaternion): np.array with length 7
-    output: T_01: se3: np.array with length 6
-    """
-    # p_RS_R_x [m], p_RS_R_y [m], p_RS_R_z [m], q_RS_w [], q_RS_x [], q_RS_y [], q_RS_z []
-    t_R0 = tq_R0[0:3]
-    t_R1 = tq_R1[0:3]
-    ww0, wx0, wy0, wz0 = tq_R0[3:]
-    ww1, wx1, wy1, wz1 = tq_R1[3:]
+def get_relative_pose(t1, t2):
+    trans_t1 = t1[:3]
+    euler_t1 = t1[-3:]
 
-    q_R0 = np.quaternion(ww0, wx0, wy0, wz0)
-    q_R0 = q_R0.normalized()
-    q_R1 = np.quaternion(ww1, wx1, wy1, wz1)
-    q_R1 = q_R1.normalized()
-    t_R0_q = np.quaternion(0, t_R0[0], t_R0[1], t_R0[2])
-    t_R1_q = np.quaternion(0, t_R1[0], t_R1[1], t_R1[2])
+    rotation_t1 = R.from_euler('zyx', np.flip(euler_t1)).as_matrix()
 
-    # q_10 = q_R1.inverse() * q_R0
-    # t_10_q = q_R1.inverse() * (t_R0_q - t_R1_q) * q_R1
-    # t_10 = t_10_q.imag
-    # tq_10 = [*t_10, *quaternion.as_float_array(q_10)]
-    # se_10 = pose_tq_to_se(tq_10)
+    transform_t1 = np.zeros((4, 4))
+    transform_t1[:3, :3] = rotation_t1
+    transform_t1[:3, 3] = trans_t1
+    transform_t1[3, 3] = 1.0
 
-    q_01 = q_R0.inverse() * q_R1
-    t_01_q = q_R0.inverse() * (t_R1_q - t_R0_q) * q_R0
-    t_01 = t_01_q.imag
-    tq_01 = [*t_01, *quaternion.as_float_array(q_01)]
-    if t_euler_loss:
-        se_01_obj = pose_tq_to_se(tq_01, return_obj=True)
-        out_t = np.array(se_01_obj.t, dtype=float).squeeze()
-        out_euler = rotationMatrixToEulerAngles(np.array(se_01_obj.so3.matrix(), dtype=float))
-        out_euler = out_euler / np.pi * 180  # in degrees
-        se_01 = np.concatenate((out_t, out_euler))
-    else:
-        se_01 = pose_tq_to_se(tq_01)
+    trans_t2 = t2[:3]
+    euler_t2 = t2[-3:]
 
-    return np.array(se_01)
+    rotation_t2 = R.from_euler('zyx', np.flip(euler_t2)).as_matrix()
+
+    transform_t2 = np.zeros((4, 4))
+    transform_t2[:3, :3] = rotation_t2
+    transform_t2[:3, 3] = trans_t2
+    transform_t2[3, 3] = 1.0
+
+    transform_result = np.dot(np.linalg.inv(transform_t1), transform_t2)
+    euler_result = np.flip(R.from_matrix(transform_result[:3, :3]).as_euler('zyx'),0)
+    trans_result = transform_result[:3, 3]
+    euler_result[0] = 0.0
+    euler_result[1] = 0.0
+    trans_result[2] = 0.0
+
+    return np.concatenate((trans_result, euler_result), 0)
+
+
+#def get_relative_pose(tq_R0, tq_R1, t_euler_loss=False):
+#    """
+#    input: T_R0, T_R1: (translation, quaternion): np.array with length 7
+#    output: T_01: se3: np.array with length 6
+#    """
+#    # p_RS_R_x [m], p_RS_R_y [m], p_RS_R_z [m], q_RS_w [], q_RS_x [], q_RS_y [], q_RS_z []
+#    t_R0 = tq_R0[0:3]
+#    t_R1 = tq_R1[0:3]
+#    ww0, wx0, wy0, wz0 = tq_R0[3:]
+#    ww1, wx1, wy1, wz1 = tq_R1[3:]
+
+#    q_R0 = np.quaternion(ww0, wx0, wy0, wz0)
+#    q_R0 = q_R0.normalized()
+#    q_R1 = np.quaternion(ww1, wx1, wy1, wz1)
+#    q_R1 = q_R1.normalized()
+#    t_R0_q = np.quaternion(0, t_R0[0], t_R0[1], t_R0[2])
+#    t_R1_q = np.quaternion(0, t_R1[0], t_R1[1], t_R1[2])
+
+#    # q_10 = q_R1.inverse() * q_R0
+#    # t_10_q = q_R1.inverse() * (t_R0_q - t_R1_q) * q_R1
+#    # t_10 = t_10_q.imag
+#    # tq_10 = [*t_10, *quaternion.as_float_array(q_10)]
+#    # se_10 = pose_tq_to_se(tq_10)
+
+#    q_01 = q_R0.inverse() * q_R1
+#    t_01_q = q_R0.inverse() * (t_R1_q - t_R0_q) * q_R0
+#    t_01 = t_01_q.imag
+#    tq_01 = [*t_01, *quaternion.as_float_array(q_01)]
+#    if t_euler_loss:
+#        se_01_obj = pose_tq_to_se(tq_01, return_obj=True)
+#        out_t = np.array(se_01_obj.t, dtype=float).squeeze()
+#        out_euler = rotationMatrixToEulerAngles(np.array(se_01_obj.so3.matrix(), dtype=float))
+#        #out_euler = out_euler / np.pi * 180  # in degrees
+#        se_01 = np.concatenate((out_t, out_euler))
+#    else:
+#        se_01 = pose_tq_to_se(tq_01)
+
+#    return np.array(se_01)
 
 
 def rotationMatrixToQuaternion(R):
@@ -407,6 +438,16 @@ def eval_rel_error(pred_rel_pose, gt_rel_pose, t_euler_loss):
     assert pred_rel_pose.shape[0] == gt_rel_pose.shape[0]
     batch_size = pred_rel_pose.shape[0]
     eval_rel = dict()
+
+    test_rel = dict()
+    gt_rel = dict()
+    err_rel = dict()
+
+    for _metric in ['x', 'y', 'theta']:
+        test_rel[_metric] = []
+        gt_rel[_metric] = []
+        err_rel[_metric] = []
+
     for _metric in ['rpe_all', 'rpe_trans', 'rpe_rot_axis', 'rpe_rot_euler']:
         eval_rel[_metric] = []
 
@@ -436,7 +477,6 @@ def eval_rel_error(pred_rel_pose, gt_rel_pose, t_euler_loss):
         T_01_pred = sp.Se3.exp(se_pred)
 
         if se_gt[3] == se_gt[4] == se_gt[5] == 0:
-            print("ici")
             T_01_gt = T_01_pred
         else:
             T_01_gt = sp.Se3.exp(se_gt)
@@ -444,44 +484,49 @@ def eval_rel_error(pred_rel_pose, gt_rel_pose, t_euler_loss):
         ## calculate eval_rel for v1 (from TT')
         T_01_rel = T_01_gt.inverse() * T_01_pred  # Se3 object
         tmp_rpe_all = np.sum(np.array(T_01_rel.log(), dtype=float) ** 2)  # (4.46) in SLAM12
+        tmp_trans = np.array(T_01_rel.t, dtype=float)
         tmp_rpe_trans = np.sum(np.array(T_01_rel.t, dtype=float) ** 2)  # (4.47) in SLAM12
         eval_rel['rpe_all'].append(np.array(tmp_rpe_all))
         eval_rel['rpe_trans'].append(np.array(tmp_rpe_trans))
 
         axis_01_rel = np.linalg.norm(np.array(T_01_rel.so3.log(), dtype=float))
-        axis_01_rel = axis_01_rel / np.pi * 180  # transform to degrees
+        #axis_01_rel = axis_01_rel / np.pi * 180  # transform to degrees
         eval_rel['rpe_rot_axis'].append(np.array(axis_01_rel))
 
         euler_01_rel = np.array(T_01_rel.so3.matrix(), dtype=float)
         euler_01_rel = rotationMatrixToEulerAngles(euler_01_rel)
-        euler_01_rel = euler_01_rel / np.pi * 180  # transform to degrees
+        #euler_01_rel = euler_01_rel / np.pi * 180  # transform to degrees
         tmp_euler = np.sum(euler_01_rel ** 2)
         eval_rel['rpe_rot_euler'].append(tmp_euler)
 
+    test_rel['x'].append(pred_rel_pose[-1, 0].cpu().numpy())
+    test_rel['y'].append(pred_rel_pose[-1, 1].cpu().numpy())
+    test_rel['theta'].append(pred_rel_pose[-1, 5].cpu().numpy())
+
+    gt_rel['x'].append(gt_rel_pose[-1, 0].cpu().numpy())
+    gt_rel['y'].append(gt_rel_pose[-1, 1].cpu().numpy())
+    gt_rel['theta'].append(gt_rel_pose[-1, 5].cpu().numpy())
+
+    err_rel['x'].append(tmp_trans[0])
+    err_rel['y'].append(tmp_trans[1])
+    err_rel['theta'].append(euler_01_rel[2])
+
     # each value in eval_rel: a list  with length eval_batch_size
-    return eval_rel
-
-
-def get_transform(state):
-    state = state.unsqueeze(0)
-    rot_matrix = quaternion_to_matrix(state[:, :, -4:])
-    euler_state = matrix_to_euler_angles(rot_matrix, 'ZYX')
-    result = torch.concat((state[:, :, :3], euler_state), 2)
-    return result
+    return eval_rel, test_rel, gt_rel, err_rel
 
 
 def get_absolute_pose(dt, state):
         clip_size = dt.size()[0]
         result = [torch.empty(0)] * clip_size
 
-        last_state = state
-
+        last_state = state #.unsqueeze(0)
         for i in range(clip_size):
             if i > 0:
                 last_state = result[i - 1].unsqueeze(0)
 
             trans_state = last_state[:, :, :3]
             euler_state = last_state[:, :, -3:]
+            euler_state = torch.flip(euler_state, (2,))
 
             rotation_state = euler_angles_to_matrix(euler_state, 'ZYX')
 
@@ -492,8 +537,7 @@ def get_absolute_pose(dt, state):
 
             delta_trans = dt[i, :, :3].squeeze(1)
             delta_euler = dt[i, :, -3:].squeeze(1)
-            rotation_dt = euler_angles_to_matrix(delta_euler, 'ZYX')
-
+            rotation_dt = euler_angles_to_matrix(torch.flip(delta_euler, (1,)), 'ZYX')
             transform_dt = torch.zeros(4, 4, device='cuda:0')
             transform_dt[:3, :3] = rotation_dt
             transform_dt[:3, 3] = delta_trans
@@ -501,7 +545,8 @@ def get_absolute_pose(dt, state):
 
             transform_result = torch.mm(transform_state, transform_dt)
 
-            euler_result = matrix_to_euler_angles(transform_result[:3, :3], 'ZYX')
+            euler_result = torch.flip(matrix_to_euler_angles(transform_result[:3, :3], 'ZYX'), (0,))
+
             trans_result = transform_result[:3, 3]
             euler_result[0] = 0.0
             euler_result[1] = 0.0
@@ -560,27 +605,31 @@ def eval_global_error(accu_global_pose, gt_global_pose):
     clip_size = accu_global_pose.shape[0]
 
     eval_global = dict()
-    for _metric in ['pred_x', 'pred_y', 'pred_theta', 'gt_x', 'gt_y', 'gt_theta', 'gpe_x', 'gpe_y', 'gpe_theta']:
+    gt_global = dict()
+    err_global = dict()
+    for _metric in ['x', 'y', 'theta']:
         eval_global[_metric] = []
+        gt_global[_metric] = []
+        err_global[_metric] = []
 
     pred = accu_global_pose[-1].squeeze(0).squeeze(0).cpu().numpy()
-    gt = get_transform(gt_global_pose[-1]).squeeze(0).squeeze(0).cpu().numpy()
+    gt = gt_global_pose[-1].squeeze(0).squeeze(0).cpu().numpy()
     dt = get_relative_pose_from_transform(pred, gt)
 
-    eval_global['pred_x'].append(pred[0])
-    eval_global['pred_y'].append(pred[1])
-    eval_global['pred_theta'].append(pred[5])
+    eval_global['x'].append(pred[0])
+    eval_global['y'].append(pred[1])
+    eval_global['theta'].append(pred[5])
 
-    eval_global['gt_x'].append(gt[0])
-    eval_global['gt_y'].append(gt[1])
-    eval_global['gt_theta'].append(gt[5])
+    gt_global['x'].append(gt[0])
+    gt_global['y'].append(gt[1])
+    gt_global['theta'].append(gt[5])
 
-    eval_global['gpe_x'].append(dt[0])
-    eval_global['gpe_y'].append(dt[1])
-    eval_global['gpe_theta'].append(dt[5])
+    err_global['x'].append(dt[0])
+    err_global['y'].append(dt[1])
+    err_global['theta'].append(dt[5])
 
     # each value in eval_global: a list with length eval_batch_size
-    return eval_global
+    return eval_global, gt_global, err_global
 
 
 def get_lr(optimizer):

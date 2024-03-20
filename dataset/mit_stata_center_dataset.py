@@ -466,16 +466,16 @@ class MitStataCenterDataset(torch.utils.data.Dataset):
             # get the euler angles (rads) from rotation matrix of _i and _i+1
             rot_i_euler = poses[_i][1][-3:]
             rot_ip1_euler = poses[_i + 1][1][-3:]
-            rot_i_quat = euler_to_quaternion(rot_i_euler, isRad=True)
-            rot_ip1_quat = euler_to_quaternion(rot_ip1_euler, isRad=True)
+            #rot_i_quat = euler_to_quaternion(rot_i_euler, isRad=True)
+            #rot_ip1_quat = euler_to_quaternion(rot_ip1_euler, isRad=True)
             # tq_R0 ~ tq_i, tq_R1 ~ tq_ip1
-            tq_i = np.concatenate([trans_i, rot_i_quat])
-            tq_ip1 = np.concatenate([trans_ip1, rot_ip1_quat])
+            tq_i = np.concatenate([trans_i, rot_i_euler])
+            tq_ip1 = np.concatenate([trans_ip1, rot_ip1_euler])
 
             tmp_seq['imus'].append(_imu)
             tmp_seq['imgs'].append(imgs[_i + 1])
             tmp_seq['global_poses'].append([poses[_i + 1][0], tq_ip1])
-            tmp_seq['rel_poses'].append([poses[_i + 1][0], get_relative_pose(tq_i, tq_ip1, self.t_euler_loss)])
+            tmp_seq['rel_poses'].append([poses[_i + 1][0], get_relative_pose(tq_i, tq_ip1)])
 
         # append the last sub_seq
         if len(tmp_seq['imus']) > 0:

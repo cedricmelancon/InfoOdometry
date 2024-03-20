@@ -24,7 +24,6 @@ from utils.tools import save_model
 from utils.tools import eval_rel_error
 from utils.tools import get_absolute_pose
 from utils.tools import eval_global_error
-from utils.tools import get_transform
 from utils.tools import get_lr
 from utils.tools import factor_lr_schedule
 from utils.tools import ScheduledOptim
@@ -258,7 +257,7 @@ def train(args):
             x_img_list, x_imu_list, x_last_rel_pose_list, y_rel_pose_list, y_last_global_pose_list, y_global_pose_list, _, _ = batch_data
             
             x_img_pairs = torch.stack(x_img_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 3, 2, H, W]
-            y_rel_poses = torch.stack(y_rel_pose_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 6]      
+            y_rel_poses = torch.stack(y_rel_pose_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 6]
             if use_imu or args.imu_only:
                 x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 11, 6]      
             running_batch_size = x_img_pairs.size()[1] # might be different for the last batch
@@ -393,9 +392,9 @@ def train(args):
             pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3], y_rel_poses[:, :, :3],
                                                                    reduction='none').sum(dim=2).mean(dim=(0, 1))
             # pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,3:], y_rel_poses[:,:,3:], reduction='none').sum(dim=2).mean(dim=(0,1))
-            pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, 3:], y_rel_poses[:, :, 3:],
+            pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
                                                               reduction='none').sum(dim=2).mean(dim=(0, 1))
-            
+
             total_loss = pose_trans_loss + pose_rot_loss
             if use_info:
                 total_loss += kl_loss
@@ -469,7 +468,7 @@ def train(args):
                     y_glob_poses = torch.stack(y_last_global_pose_list, dim=0).type(torch.FloatTensor).to(device=args.device)
 
                     if last_pose is None:
-                        last_pose = get_transform(y_glob_poses[0])
+                        last_pose = y_glob_poses[0].unsqueeze(0)
 
                     if use_imu or args.imu_only: 
                         x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=args.device)
@@ -546,7 +545,7 @@ def train(args):
                                                                            y_rel_poses[:, :, :3], reduction='none').sum(
                         dim=2).mean(dim=(0, 1))
                     # pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,3:], y_rel_poses[:,:,3:], reduction='none').sum(dim=2).mean(dim=(0,1))
-                    pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, 3:], y_rel_poses[:, :, 3:],
+                    pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
                                                                       reduction='none').sum(dim=2).mean(dim=(0, 1))
 
                     total_loss = pose_trans_loss + pose_rot_loss
@@ -565,15 +564,17 @@ def train(args):
                     
                     for _fidx in range(args.clip_length):
                         # (1) evaluate relative pose error (2) no discard_num is used
-                        eval_rel = eval_rel_error(pred_rel_poses[_fidx], y_rel_poses[_fidx], t_euler_loss=args.t_euler_loss)
+                        eval_rel, test_rel, gt_rel, err_rel = eval_rel_error(pred_rel_poses[_fidx], y_rel_poses[_fidx], t_euler_loss=args.t_euler_loss)
                         for _met in ['rpe_all', 'rpe_trans', 'rpe_rot_axis', 'rpe_rot_euler']:
                             list_eval[_met].extend(eval_rel[_met])
 
                     new_pose = get_absolute_pose(pred_rel_poses, last_pose).unsqueeze(1)
-                    eval_glob = eval_global_error(new_pose, torch.stack(y_global_pose_list, 0))
-
-                    for _met in ['pred_x', 'pred_y', 'pred_theta', 'gt_x', 'gt_y', 'gt_theta', 'gpe_x', 'gpe_y', 'gpe_theta']:
-                        writer.add_scalar(f'test/{_met}', eval_glob[_met], batch_idx)
+                    eval_glob, gt_glob, err_glob = eval_global_error(new_pose[-1], y_global_pose_list[-1])
+                    for _met in ['x', 'y', 'theta']:
+                        writer.add_scalars(f'test/abs_{_met}', { 'eval': eval_glob[_met], 'gt': gt_glob[_met] }, batch_idx)
+                        writer.add_scalar(f'test/abs_err_{_met}', err_glob[_met], batch_idx)
+                        writer.add_scalars(f'test/rel_{_met}', {'eval': test_rel[_met], 'gt': gt_rel[_met]}, batch_idx)
+                        writer.add_scalar(f'test/rel_err_{_met}', err_rel[_met], batch_idx)
 
                     save_data(eval_csvwriter, total_loss, y_glob_poses, y_rel_poses, new_pose, pred_rel_poses, epoch_idx, batch_idx)
                     last_pose = new_pose[1]

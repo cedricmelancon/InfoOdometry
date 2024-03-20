@@ -78,7 +78,7 @@ class Param:
                                  help='observation imu loss weight; 0 to disable')
         self.parser.add_argument('--bit_depth', type=int, default=5, help='image bit depth (quantisation)')
         self.parser.add_argument('--adam_epsilon', type=float, default=1e-4, help='adam optimizer epsilon value')
-        self.parser.add_argument('--grad_clip_norm', type=float, default=1000, help='gradient clipping norm')
+        self.parser.add_argument('--grad_clip_norm', type=float, default=100, help='gradient clipping norm')
         self.parser.add_argument('--rec_loss', type=str, default='mean', choices=["sum", "mean"],
                                  help='observation reconstruction loss type: sum or mean')
         self.parser.add_argument('--load_model', type=str, default='none',
