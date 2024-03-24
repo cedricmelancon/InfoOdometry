@@ -1187,7 +1187,8 @@ class PoseModel(nn.Module):
         self.dropout = nn.Dropout(0.3)
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3_trans = nn.Linear(hidden_size, 2)
+        self.fc3_trans_x = nn.Linear(hidden_size, 1)
+        self.fc3_trans_y = nn.Linear(hidden_size, 1)
         self.fc3_rot = nn.Linear(hidden_size, 1)
 
     # @jit.script_method
@@ -1195,11 +1196,12 @@ class PoseModel(nn.Module):
     def forward(self, state):
         hidden = self.act_fn(self.dropout(self.fc1(state)))
         hidden = self.act_fn(self.dropout(self.fc2(hidden)))
-        trans = self.fc3_trans(hidden)
-        zero_trans = torch.zeros([trans.shape[0], 1]).to('cuda:1')
+        trans_x = self.fc3_trans_x(hidden)
+        trans_y = self.fc3_trans_y(hidden)
+        zero_trans = torch.zeros([trans_x.shape[0], 1]).to('cuda:0')
         rot = self.fc3_rot(hidden)
-        zero_rot = torch.zeros([rot.shape[0], 2]).to('cuda:1')
-        return torch.cat([trans, zero_trans, zero_rot, rot], dim=1)
+        zero_rot = torch.zeros([rot.shape[0], 2]).to('cuda:0')
+        return torch.cat([trans_x, trans_y, zero_trans, zero_rot, rot], dim=1)
 
 
 class SymbolicObservationModel(nn.Module):

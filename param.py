@@ -18,7 +18,7 @@ class Param:
         self.parser.add_argument('--img_prefeat', type=str, default='none',
                                  help='none, flownet or resnet (not implemented yet)')
         self.parser.add_argument('--failure_type', type=str, default='noise', help='noise, missing, mixed or none')
-        self.parser.add_argument('--sample_size_ratio', type=float, default=1.0,
+        self.parser.add_argument('--sample_size_ratio', type=float, default=0.6,
                                  help='the ratio of total non-overlapped clips (1) only take effect in (0,1) (2) only used in training')
         self.parser.add_argument('--imu_only', action='store_const', default=False, const=True,
                                  help='need to be used with --transition_model double')
@@ -39,8 +39,8 @@ class Param:
                                  help='kl weight for posterior and prior states in the world model')
         self.parser.add_argument('--global_kl_beta', type=float, default=0, help='global kl weight (0 to disable)')
         self.parser.add_argument('--eval_ckp', type=str, default='best', help='best, last')
-        self.parser.add_argument('--translation_weight', type=float, default=1, help='weight for translation_loss')
-        self.parser.add_argument('--rotation_weight', type=float, default=1, help='weight for rotation_loss')
+        self.parser.add_argument('--translation_weight', type=float, default=1000, help='weight for translation_loss')
+        self.parser.add_argument('--rotation_weight', type=float, default=1000, help='weight for rotation_loss')
 
         # for soft / hard deepvio baselines
         self.parser.add_argument('--soft', action='store_const', default=False, const=True)
@@ -111,7 +111,7 @@ class Param:
                                  help='used together with --lr_schedule, separated by , ')
         self.parser.add_argument('--eval_batch_size', type=int, default=1,
                                  help='if --train: equal to batch_size; if --eval: 1 by default')
-        self.parser.add_argument('--optimizer', type=str, default='adam', help='should be either adam or sgd')
+        self.parser.add_argument('--optimizer', type=str, default='sgd', help='should be either adam or sgd')
         self.parser.add_argument('--momentum', type=float, default=0.9, help='only for sgd optimizer')
         self.parser.add_argument('--train_discard_num', type=int, default=0,
                                  help='the number of beginning frames to be discarded in training')
@@ -130,8 +130,8 @@ class Param:
         self.parser.add_argument('--dataset', type=str, default='euroc', choices=["kitti", "mit", "euroc", "vkitti2"],
                                  help='euroc, kitti (determine base_dir, train/eval_sequences')
         self.parser.add_argument('--base_dir', type=str, default='/data', help='should not be specified')
-        self.parser.add_argument('--train_sequences', type=str, default='2012-01-25-12-14-25,2012-04-03-07-56-24,2012-05-02-06-23-02', help='separated by , ')
-        self.parser.add_argument('--train_sequences_gt', type=str, default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part4_floor2,2012-05-02-06-23-02_part2_floor2',
+        self.parser.add_argument('--train_sequences', type=str, default='2012-01-25-12-14-25,2012-04-03-07-56-24,2012-05-02-06-23-02,2012-01-28-12-38-24,2012-01-28-12-38-24,2012-01-27-07-37-01,2012-01-27-07-37-01', help='separated by , ')
+        self.parser.add_argument('--train_sequences_gt', type=str, default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part4_floor2,2012-05-02-06-23-02_part2_floor2,2012-01-28-12-38-24_part1_floor2,2012-01-28-12-38-24_part4_floor2,2012-01-27-07-37-01_part1_floor2,2012-01-27-07-37-01_part3_floor2',
                                  help='separated by , ')
         self.parser.add_argument('--eval_sequences', type=str, default='2012-04-03-07-56-24', help='separated by , ')
         self.parser.add_argument('--eval_sequences_gt', type=str, default='2012-04-03-07-56-24_part1_floor2',
@@ -145,7 +145,7 @@ class Param:
         self.parser.add_argument('--euroc_ds_type', type=str, default=None,
                                  help="Deprecated => Remain here for code compacity in eval")
         self.parser.add_argument('--resize_mode', type=str, default='rescale', help='crop or rescale')
-        self.parser.add_argument('--new_img_size', type=str, default='192,640', help='two int separated by , ')
+        self.parser.add_argument('--new_img_size', type=str, default='480,640', help='two int separated by , ')
 
         # args for evaluating euroc
         self.parser.add_argument('--eval_euroc_interp', action='store_const', default=False, const=True,

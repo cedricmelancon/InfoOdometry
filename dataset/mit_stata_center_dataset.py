@@ -446,6 +446,9 @@ class MitStataCenterDataset(torch.utils.data.Dataset):
         #     -> Correspondence: imu[i] ~ (img[i], img[i+1])
         #         * last_global_pose: global_poses[i], curr_global_pose: global_poses[i+1]
         #         * last_rel_pose: rel_pose[i], curr_rel_pose: rel_poses[i+1]
+        print(len(imgs))
+        print(len(imus))
+        print(len(poses))
         assert len(imgs) == len(poses)
         assert len(imus) == len(imgs) - 1
 
