@@ -111,9 +111,9 @@ def train(args):
         free_nats = torch.full((1, ), args.free_nats, device=args.device) # allowed deviation in kl divergence
     
     if not args.lr_warmup:
-        #lmbda = lambda epoch: factor_lr_schedule(epoch, divide_epochs=args.lr_schedule, lr_factors=args.lr_factor)
-        #scheduler = LambdaLR(optimizer, lr_lambda=lmbda)
-        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, threshold=0.0001, threshold_mode='abs')
+        lmbda = lambda epoch: factor_lr_schedule(epoch, divide_epochs=args.lr_schedule, lr_factors=args.lr_factor)
+        scheduler = LambdaLR(optimizer, lr_lambda=lmbda)
+        #scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, threshold=0.0001, threshold_mode='abs')
 
     # initialize datasets and data loaders
 
@@ -331,13 +331,13 @@ def train(args):
                         elif args.rec_type == 'prior':
                             pred_observations = bottle(observation_model, (beliefs_visual, prior_states, )) 
                     if args.rec_loss == 'sum':
-                        #observation_loss = F.mse_loss(pred_observations, observations, reduction='none').sum(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
-                        observation_loss = F.l1_loss(pred_observations, observations, reduction='none').sum(
-                            dim=2).mean(dim=(0, 1))  # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        observation_loss = F.mse_loss(pred_observations, observations, reduction='none').sum(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        #observation_loss = F.l1_loss(pred_observations, observations, reduction='none').sum(
+                        #    dim=2).mean(dim=(0, 1))  # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
                     elif args.rec_loss == 'mean':
-                        #observation_loss = F.mse_loss(pred_observations, observations, reduction='none').mean(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
-                        observation_loss = F.l1_loss(pred_observations, observations, reduction='none').mean(
-                            dim=2).mean(dim=(0, 1))  # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        observation_loss = F.mse_loss(pred_observations, observations, reduction='none').mean(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        #observation_loss = F.l1_loss(pred_observations, observations, reduction='none').mean(
+                        #    dim=2).mean(dim=(0, 1))  # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
                     observation_loss = args.observation_beta * observation_loss
             
                 # observation reconstruction for imus
@@ -354,17 +354,17 @@ def train(args):
                         elif args.rec_type == 'prior':
                             pred_imu_observations = bottle(observation_imu_model, (beliefs[1], prior_states, )) 
                     if args.rec_loss == 'sum':
-                        #observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').sum(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
-                         observation_imu_loss = F.l1_loss(pred_imu_observations,
-                                                          x_imu_seqs.view(pred_imu_observations.size()),
-                                                          reduction='none').sum(dim=2).mean(
-                            dim=(0, 1))  # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').sum(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        # observation_imu_loss = F.l1_loss(pred_imu_observations,
+                        #                                  x_imu_seqs.view(pred_imu_observations.size()),
+                        #                                  reduction='none').sum(dim=2).mean(
+                        #    dim=(0, 1))  # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
                     elif args.rec_loss == 'mean':
-                        #observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').mean(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
-                        observation_imu_loss = F.l1_loss(pred_imu_observations,
-                                                          x_imu_seqs.view(pred_imu_observations.size()),
-                                                          reduction='none').mean(dim=2).mean(
-                            dim=(0, 1))  # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').mean(dim=2).mean(dim=(0,1)) # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
+                        #observation_imu_loss = F.l1_loss(pred_imu_observations,
+                        #                                  x_imu_seqs.view(pred_imu_observations.size()),
+                        #                                  reduction='none').mean(dim=2).mean(
+                        #    dim=(0, 1))  # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
                     observation_imu_loss = args.observation_imu_beta * observation_imu_loss
                     
                 if args.kl_free_nats == 'none':
@@ -388,12 +388,12 @@ def train(args):
             
             
             pred_rel_poses = bottle(pose_model, (posterior_states, ))
-            #pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:3], y_rel_poses[:,:,:3], reduction='none').sum(dim=2).mean(dim=(0,1))
-            pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3], y_rel_poses[:, :, :3],
-                                                                   reduction='none').sum(dim=2).mean(dim=(0, 1))
-            #pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,3:], y_rel_poses[:,:,3:], reduction='none').sum(dim=2).mean(dim=(0,1))
-            pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
-                                                              reduction='none').sum(dim=2).mean(dim=(0, 1))
+            pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:2]*1000, y_rel_poses[:,:,:2]*1000, reduction='none').sum(dim=2).mean(dim=(0,1))
+            #pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3], y_rel_poses[:, :, :3],
+            #                                                       reduction='none').sum(dim=2).mean(dim=(0, 1))
+            pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,-1:]*1000, y_rel_poses[:,:,-1:]*1000, reduction='none').sum(dim=2).mean(dim=(0,1))
+            #pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
+            #                                                  reduction='none').sum(dim=2).mean(dim=(0, 1))
 
             total_loss = pose_trans_loss + pose_rot_loss
             if use_info:
@@ -503,13 +503,13 @@ def train(args):
                             elif args.rec_type == 'prior':
                                 pred_observations = bottle(observation_model, (beliefs_visual, prior_states, ))
                             if args.rec_loss == 'sum': 
-                                #observation_loss = F.mse_loss(pred_observations, observations, reduction='none').sum(dim=2).mean(dim=(0,1))
-                                observation_loss = F.l1_loss(pred_observations, observations, reduction='none').sum(
-                                    dim=2).mean(dim=(0, 1))
+                                observation_loss = F.mse_loss(pred_observations, observations, reduction='none').sum(dim=2).mean(dim=(0,1))
+                                #observation_loss = F.l1_loss(pred_observations, observations, reduction='none').sum(
+                                #    dim=2).mean(dim=(0, 1))
                             elif args.rec_loss == 'mean':
-                                #observation_loss = F.mse_loss(pred_observations, observations, reduction='none').mean(dim=2).mean(dim=(0,1))
-                                observation_loss = F.l1_loss(pred_observations, observations, reduction='none').mean(
-                                    dim=2).mean(dim=(0, 1))
+                                observation_loss = F.mse_loss(pred_observations, observations, reduction='none').mean(dim=2).mean(dim=(0,1))
+                                #observation_loss = F.l1_loss(pred_observations, observations, reduction='none').mean(
+                                #    dim=2).mean(dim=(0, 1))
                             # observation_loss = args.observation_beta * observation_loss
                         
                         if use_imu and args.observation_imu_beta != 0:
@@ -518,15 +518,15 @@ def train(args):
                             elif args.rec_type == 'prior':
                                 pred_imu_observations = bottle(observation_imu_model, (beliefs[1], prior_states, ))
                             if args.rec_loss == 'sum':
-                                #observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').sum(dim=2).mean(dim=(0,1))
-                                observation_imu_loss = F.l1_loss(pred_imu_observations,
-                                                                  x_imu_seqs.view(pred_imu_observations.size()),
-                                                                  reduction='none').sum(dim=2).mean(dim=(0, 1))
+                                observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').sum(dim=2).mean(dim=(0,1))
+                                #observation_imu_loss = F.l1_loss(pred_imu_observations,
+                                #                                  x_imu_seqs.view(pred_imu_observations.size()),
+                                #                                  reduction='none').sum(dim=2).mean(dim=(0, 1))
                             elif args.rec_loss == 'mean':
-                                #observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').mean(dim=2).mean(dim=(0,1))
-                                observation_imu_loss = F.l1_loss(pred_imu_observations,
-                                                                  x_imu_seqs.view(pred_imu_observations.size()),
-                                                                  reduction='none').mean(dim=2).mean(dim=(0, 1))
+                                observation_imu_loss = F.mse_loss(pred_imu_observations, x_imu_seqs.view(pred_imu_observations.size()), reduction='none').mean(dim=2).mean(dim=(0,1))
+                                #observation_imu_loss = F.l1_loss(pred_imu_observations,
+                                #                                  x_imu_seqs.view(pred_imu_observations.size()),
+                                #                                  reduction='none').mean(dim=2).mean(dim=(0, 1))
                             # observation_imu_loss = args.observation_imu_beta * observation_imu_loss
                         
                         kl_loss = kl_divergence(Normal(posterior_means, posterior_std_devs), Normal(prior_means, prior_std_devs)).sum(dim=2).mean(dim=(0,1))
@@ -540,13 +540,13 @@ def train(args):
                                 # kl_loss += args.global_kl_beta * kl_divergence(Normal(posterior_means, posterior_std_devs), tmp_global_prior).sum(dim=2).mean(dim=(0,1))
                                 kl_loss += kl_divergence(Normal(posterior_means, posterior_std_devs), tmp_global_prior).sum(dim=2).mean(dim=(0,1))
                     
-                    #pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:3], y_rel_poses[:,:,:3], reduction='none').sum(dim=2).mean(dim=(0,1))
-                    pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3],
-                                                                           y_rel_poses[:, :, :3], reduction='none').sum(
-                        dim=2).mean(dim=(0, 1))
-                    #pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,3:], y_rel_poses[:,:,3:], reduction='none').sum(dim=2).mean(dim=(0,1))
-                    pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
-                                                                      reduction='none').sum(dim=2).mean(dim=(0, 1))
+                    pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:2]*1000., y_rel_poses[:,:,:2]*1000, reduction='none').sum(dim=2).mean(dim=(0,1))
+                    #pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3],
+                    #                                                       y_rel_poses[:, :, :3], reduction='none').sum(
+                    #    dim=2).mean(dim=(0, 1))
+                    pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,-1:]*1000, y_rel_poses[:,:,-1:]*1000, reduction='none').sum(dim=2).mean(dim=(0,1))
+                    #pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
+                    #                                                  reduction='none').sum(dim=2).mean(dim=(0, 1))
 
                     total_loss = pose_trans_loss + pose_rot_loss
                     if use_info:
@@ -604,7 +604,7 @@ def train(args):
 
             # update learning rate for next epoch
             if not args.lr_warmup:
-                scheduler.step(loss_avg['total_loss'].item())
+                scheduler.step()  # loss_avg['total_loss'].item())
 
             check_str = '{}{}/ckp_latest.pt'.format(args.ckp_dir, args.exp_name)
             save_args = {

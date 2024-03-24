@@ -1184,19 +1184,22 @@ class PoseModel(nn.Module):
         # use posterior_states for pose prediction (since prior_states already contains pose information)
         super().__init__()
         self.act_fn = getattr(F, activation_function)
+        self.dropout = nn.Dropout(0.3)
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3_trans = nn.Linear(hidden_size, 3)
-        self.fc3_rot = nn.Linear(hidden_size, 3)
+        self.fc3_trans = nn.Linear(hidden_size, 2)
+        self.fc3_rot = nn.Linear(hidden_size, 1)
 
     # @jit.script_method
     # def forward(self, state, state_std):
     def forward(self, state):
-        hidden = self.act_fn(self.fc1(state))
-        hidden = self.act_fn(self.fc2(hidden))
+        hidden = self.act_fn(self.dropout(self.fc1(state)))
+        hidden = self.act_fn(self.dropout(self.fc2(hidden)))
         trans = self.fc3_trans(hidden)
+        zero_trans = torch.zeros([trans.shape[0], 1]).to('cuda:1')
         rot = self.fc3_rot(hidden)
-        return torch.cat([trans, rot], dim=1)
+        zero_rot = torch.zeros([rot.shape[0], 2]).to('cuda:1')
+        return torch.cat([trans, zero_trans, zero_rot, rot], dim=1)
 
 
 class SymbolicObservationModel(nn.Module):

@@ -23,16 +23,17 @@ class SeqVINet(nn.Module):
         self.use_hard = args.hard
         self.embedding_size = embedding_size
         self.act_fn = getattr(F, activation_function)
+        self.dropout = torch.nn.Dropout(0.3)
         if self.use_imu:
             if args.imu_rnn == 'lstm':
-                self.rnn_embed_imu = nn.LSTM(input_size=6, hidden_size=embedding_size, num_layers=2, batch_first=True)
+                self.rnn_embed_imu = nn.LSTM(input_size=6, hidden_size=embedding_size, num_layers=2, batch_first=True, dropout=0.2)
             elif args.imu_rnn == 'gru':
-                self.rnn_embed_imu = nn.GRU(input_size=6, hidden_size=embedding_size, num_layers=2, batch_first=True)
+                self.rnn_embed_imu = nn.GRU(input_size=6, hidden_size=embedding_size, num_layers=2, batch_first=True, dropout=0.2)
             self.fc_embed_sensors = nn.Linear(2 * embedding_size, belief_size)
         else:
             self.fc_embed_sensors = nn.Linear(embedding_size, belief_size)
         if args.belief_rnn == 'lstm':
-            self.rnn_fusion = nn.LSTM(input_size=belief_size, hidden_size=belief_size, num_layers=2, batch_first=True)
+            self.rnn_fusion = nn.LSTM(input_size=belief_size, hidden_size=belief_size, num_layers=2, batch_first=True, dropout=0.2)
         elif args.belief_rnn == 'gru':
             self.rnn_fusion = nn.GRUCell(belief_size, belief_size)
         self.fc_embed_fusion = nn.Linear(belief_size, hidden_size)
@@ -118,9 +119,9 @@ class SeqVINet(nn.Module):
                     hard_mask[:, self.embedding_size:] = hard_mask_imu
                     fused_feat = fused_feat * hard_mask
                     
-                hidden = self.act_fn(self.fc_embed_sensors(fused_feat))
+                hidden = self.act_fn(self.dropout(self.fc_embed_sensors(fused_feat)))
             else:
-                hidden = self.act_fn(self.fc_embed_sensors(observations[t_ + 1]))
+                hidden = self.act_fn(self.dropout(self.fc_embed_sensors(observations[t_ + 1])))
                 
             if self.args.belief_rnn == 'gru':
                 fusion_features[t + 1] = self.rnn_fusion(hidden, fusion_features[t])
@@ -128,7 +129,7 @@ class SeqVINet(nn.Module):
                 hidden = hidden.unsqueeze(1)
                 fusion_feature_rnn, fusion_lstm_hiddens[t + 1] = self.rnn_fusion(hidden, fusion_lstm_hiddens[t])
                 fusion_features[t + 1] = fusion_feature_rnn.squeeze(1)
-            hidden = self.act_fn(self.fc_embed_fusion(fusion_features[t + 1]))
+            hidden = self.act_fn(self.dropout(self.fc_embed_fusion(fusion_features[t + 1])))
             out_features[t_ + 1] = self.fc_out_fusion(hidden)
             if use_pose_model:
                 with torch.no_grad():

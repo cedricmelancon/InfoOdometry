@@ -132,7 +132,10 @@ class KittiClipDataset(torch.utils.data.Dataset):
                     clips.append(self.get_clip(sub_seq, j_seq))
         if not self.on_the_fly and self.use_img_prefeat:
             self.update_loaded_prefeats(clips)
+
+        print(f'new clips: {len(clips)}')
         self.clips.extend(clips)
+        print(f'New count: {len(self.clips)}')
     
     
     def update_loaded_prefeats(self, clips):

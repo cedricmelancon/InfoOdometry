@@ -614,7 +614,7 @@ def eval_global_error(accu_global_pose, gt_global_pose):
 
     pred = accu_global_pose[-1].squeeze(0).squeeze(0).cpu().numpy()
     gt = gt_global_pose[-1].squeeze(0).squeeze(0).cpu().numpy()
-    dt = get_relative_pose_from_transform(pred, gt)
+    dt = get_relative_pose_from_transform(gt, pred)
 
     eval_global['x'].append(pred[0])
     eval_global['y'].append(pred[1])

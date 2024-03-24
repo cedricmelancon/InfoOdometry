@@ -502,7 +502,6 @@ def load_mit_clips(seqs=None, seqs_gt=None, batch_size=None, shuffle=None, overl
     # randomly reduce the sample_size to sample_size_ratio
     print(f'sample size ratio: {sample_size_ratio}')
     if 0 < sample_size_ratio < 1:
-        print('trim')
         tmp_clips.trim_samples(sample_size_ratio)
 
     print("============================")
