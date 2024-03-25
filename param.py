@@ -30,7 +30,7 @@ class Param:
         self.parser.add_argument('--transition_model', type=str, default='single',
                                  help='single, double, single-vinet, multi-vinet, deepvo, deepvio')
         self.parser.add_argument('--rec_type', type=str, default='posterior', help='posterior or prior')
-        self.parser.add_argument('--imu_rnn', type=str, default='lstm', help='gru or lstm')
+        self.parser.add_argument('--imu_rnn', type=str, default='gru', help='gru or lstm')
         self.parser.add_argument('--eval_uncertainty', action='store_const', default=False, const=True)
         self.parser.add_argument('--uncertainty_groups', type=int, default=1, help='1, 2')
         self.parser.add_argument('--kl_free_nats', type=str, default='max', help='none, min, max')
@@ -61,9 +61,9 @@ class Param:
         self.parser.add_argument('--activation_function', type=str, default='tanh', choices=dir(F),
                                  help='model activation function')
         self.parser.add_argument('--embedding_size', type=int, default=1024, help='observation embedding size')
-        self.parser.add_argument('--hidden_size', type=int, default=512, help='hidden size')
+        self.parser.add_argument('--hidden_size', type=int, default=1024, help='hidden size')
         self.parser.add_argument('--belief_size', type=int, default=512, help='belief/hidden size')
-        self.parser.add_argument('--belief_rnn', type=str, default='lstm', help='lstm or gru')
+        self.parser.add_argument('--belief_rnn', type=str, default='gru', help='lstm or gru')
         self.parser.add_argument('--state_size', type=int, default=256, help='state/latent size')
         self.parser.add_argument('--batch_size', type=int, default=16, help='batch size')
         self.parser.add_argument('--overshooting_distance', type=int, default=10,
@@ -130,8 +130,8 @@ class Param:
         self.parser.add_argument('--dataset', type=str, default='euroc', choices=["kitti", "mit", "euroc", "vkitti2"],
                                  help='euroc, kitti (determine base_dir, train/eval_sequences')
         self.parser.add_argument('--base_dir', type=str, default='/data', help='should not be specified')
-        self.parser.add_argument('--train_sequences', type=str, default='2012-01-25-12-14-25,2012-04-03-07-56-24,2012-05-02-06-23-02', help='separated by , ')
-        self.parser.add_argument('--train_sequences_gt', type=str, default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part4_floor2,2012-05-02-06-23-02_part2_floor2',
+        self.parser.add_argument('--train_sequences', type=str, default='2012-01-25-12-14-25,2012-04-03-07-56-24,2012-05-02-06-23-02,2012-01-28-12-38-24,2012-01-28-12-38-24,2012-01-27-07-37-01,2012-01-27-07-37-01', help='separated by , ')
+        self.parser.add_argument('--train_sequences_gt', type=str, default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part4_floor2,2012-05-02-06-23-02_part2_floor2,2012-01-28-12-38-24_part1_floor2,2012-01-28-12-38-24_part4_floor2,2012-01-27-07-37-01_part1_floor2,2012-01-27-07-37-01_part3_floor2',
                                  help='separated by , ')
         self.parser.add_argument('--eval_sequences', type=str, default='2012-04-03-07-56-24', help='separated by , ')
         self.parser.add_argument('--eval_sequences_gt', type=str, default='2012-04-03-07-56-24_part1_floor2',
@@ -145,7 +145,7 @@ class Param:
         self.parser.add_argument('--euroc_ds_type', type=str, default=None,
                                  help="Deprecated => Remain here for code compacity in eval")
         self.parser.add_argument('--resize_mode', type=str, default='rescale', help='crop or rescale')
-        self.parser.add_argument('--new_img_size', type=str, default='192,640', help='two int separated by , ')
+        self.parser.add_argument('--new_img_size', type=str, default='480,640', help='two int separated by , ')
 
         # args for evaluating euroc
         self.parser.add_argument('--eval_euroc_interp', action='store_const', default=False, const=True,
