@@ -220,6 +220,7 @@ def train(args):
     
     # starting training (the same epochs for each sequence)
     curr_iter = 0
+    curr_eval_iter = 0
     for epoch_idx in range(epoch):    
         print('-----------------------------------------')
         print('starting epoch {}...'.format(epoch_idx))
@@ -388,14 +389,16 @@ def train(args):
             
             
             pred_rel_poses = bottle(pose_model, (posterior_states, ))
-            pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:2]*1000, y_rel_poses[:,:,:2]*1000, reduction='none').sum(dim=2).mean(dim=(0,1))
+            #pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, :2] * 1000, y_rel_poses[:, :, :2] * 1000, reduction='none').sum(dim=2).mean(dim=(0, 1))
+            pose_trans_loss_x = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, :1]*10000, y_rel_poses[:,:,:1]*10000, reduction='none').sum(dim=2).mean(dim=(0,1))
+            pose_trans_loss_y = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, 1:2] * 10000, y_rel_poses[:, :, 1:2] * 10000, reduction='none').sum(dim=2).mean(dim=(0, 1))
             #pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3], y_rel_poses[:, :, :3],
             #                                                       reduction='none').sum(dim=2).mean(dim=(0, 1))
             pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,-1:]*1000, y_rel_poses[:,:,-1:]*1000, reduction='none').sum(dim=2).mean(dim=(0,1))
             #pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
             #                                                  reduction='none').sum(dim=2).mean(dim=(0, 1))
 
-            total_loss = pose_trans_loss + pose_rot_loss
+            total_loss = pose_trans_loss_x + pose_trans_loss_y + pose_rot_loss
             if use_info:
                 total_loss += kl_loss
                 if args.observation_beta != 0: total_loss += observation_loss
@@ -411,7 +414,7 @@ def train(args):
                 if args.observation_beta != 0: writer.add_scalar('train/observation_visual_loss', observation_loss.item(), curr_iter)
                 if use_imu and args.observation_imu_beta != 0: writer.add_scalar('train/observation_imu_loss', observation_imu_loss.item(), curr_iter)
                 writer.add_scalar('train/kl_loss', kl_loss.item(), curr_iter)
-            writer.add_scalar('train/pose_trans_loss', pose_trans_loss.item(), curr_iter)
+            writer.add_scalar('train/pose_trans_loss', pose_trans_loss_x.item() + pose_trans_loss_y.item(), curr_iter)
             writer.add_scalar('train/pose_rot_loss', pose_rot_loss.item(), curr_iter)
             writer.add_scalar('train/learning_rate', get_lr(optimizer), curr_iter)
             curr_iter += 1
@@ -420,7 +423,7 @@ def train(args):
             remain_time = batch_timer.get_remaining_time(batch_idx, last_batch_index)
             remain_time = '{:.0f}h:{:2.0f}m:{:2.0f}s'.format(remain_time//3600, (remain_time%3600)//60, (remain_time%60))
             
-            loss_str = '{:.5f}+{:.5f}'.format(pose_trans_loss.item(), pose_rot_loss.item())
+            loss_str = '{:.5f}+{:.5f}'.format(pose_trans_loss_x.item() + pose_trans_loss_y.item(), pose_rot_loss.item())
             if use_info:
                 loss_str = '{:.5f}+{}'.format(kl_loss.item(), loss_str)
                 if use_imu and args.observation_imu_beta != 0: loss_str = '{:.5f}+{}'.format(observation_imu_loss.item(), loss_str)
@@ -539,8 +542,10 @@ def train(args):
                                 tmp_global_prior = Normal(torch.zeros(running_eval_batch_size, args.state_size, device=args.device), torch.ones(running_eval_batch_size, args.state_size, device=args.device))
                                 # kl_loss += args.global_kl_beta * kl_divergence(Normal(posterior_means, posterior_std_devs), tmp_global_prior).sum(dim=2).mean(dim=(0,1))
                                 kl_loss += kl_divergence(Normal(posterior_means, posterior_std_devs), tmp_global_prior).sum(dim=2).mean(dim=(0,1))
-                    
-                    pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:2]*1000., y_rel_poses[:,:,:2]*1000, reduction='none').sum(dim=2).mean(dim=(0,1))
+
+                    pose_trans_loss_x = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, :1] * 10000., y_rel_poses[:, :, :1] * 10000, reduction='none').sum(dim=2).mean(dim=(0, 1))
+                    pose_trans_loss_y = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, 1:2] * 10000., y_rel_poses[:, :, 1:2] * 10000, reduction='none').sum(dim=2).mean(dim=(0, 1))
+                    #pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:2]*1000., y_rel_poses[:,:,:2]*1000, reduction='none').sum(dim=2).mean(dim=(0,1))
                     #pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3],
                     #                                                       y_rel_poses[:, :, :3], reduction='none').sum(
                     #    dim=2).mean(dim=(0, 1))
@@ -548,7 +553,7 @@ def train(args):
                     #pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
                     #                                                  reduction='none').sum(dim=2).mean(dim=(0, 1))
 
-                    total_loss = pose_trans_loss + pose_rot_loss
+                    total_loss = pose_trans_loss_x + pose_trans_loss_y + pose_rot_loss
                     if use_info:
                         total_loss += kl_loss
                         if args.observation_beta != 0: total_loss += observation_loss
@@ -559,7 +564,7 @@ def train(args):
                         if args.observation_beta != 0: loss_avg['observation_visual_loss'].append(observation_loss)
                         if use_imu and args.observation_imu_beta != 0: loss_avg['observation_imu_loss'].append(observation_imu_loss)
                         loss_avg['kl_loss'].append(kl_loss)
-                    loss_avg['pose_trans_loss'].append(pose_trans_loss)
+                    loss_avg['pose_trans_loss'].append(pose_trans_loss_x + pose_trans_loss_y)
                     loss_avg['pose_rot_loss'].append(pose_rot_loss)
                     
                     for _fidx in range(args.clip_length):
@@ -576,6 +581,10 @@ def train(args):
                         writer.add_scalars(f'test/rel_{_met}', {'eval': test_rel[_met], 'gt': gt_rel[_met]}, batch_idx)
                         writer.add_scalar(f'test/rel_err_{_met}', err_rel[_met], batch_idx)
 
+                    writer.add_scalar('eval/pose_trans_loss', pose_trans_loss_x.item() + pose_trans_loss_y.item(),
+                                      curr_eval_iter)
+                    writer.add_scalar('eval/pose_rot_loss', pose_rot_loss.item(), curr_eval_iter)
+                    curr_eval_iter += 1
                     save_data(eval_csvwriter, total_loss, y_glob_poses, y_rel_poses, new_pose, pred_rel_poses, epoch_idx, batch_idx)
                     last_pose = new_pose[1]
 
@@ -583,7 +592,7 @@ def train(args):
                     remain_time = batch_timer.get_remaining_time(batch_idx, last_batch_index)
                     remain_time = '{:.0f}h:{:2.0f}m:{:2.0f}s'.format(remain_time//3600, (remain_time%3600)//60, (remain_time%60))
 
-                    loss_str = '{:.5f}+{:.5f}'.format(pose_trans_loss.item(), pose_rot_loss.item())
+                    loss_str = '{:.5f}+{:.5f}'.format(pose_trans_loss_x.item() + pose_trans_loss_y.item(), pose_rot_loss.item())
                     if use_info:
                         loss_str = '{:.5f}+{}'.format( kl_loss.item(), loss_str)
                         if use_imu and args.observation_imu_beta != 0: loss_str = '{:.5f}+{}'.format(observation_imu_loss.item(), loss_str)

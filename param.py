@@ -105,9 +105,9 @@ class Param:
         self.parser.add_argument('--lr', type=float, default=1e-4)
         self.parser.add_argument('--lr_warmup', action='store_const', default=False, const=True)
         self.parser.add_argument('--n_warmup_steps', type=int, default=12800)
-        self.parser.add_argument('--lr_schedule', type=str, default='150,250',
+        self.parser.add_argument('--lr_schedule', type=str, default='20,75,100',
                                  help='epoch to reduce lr to intial_lr times the corresponding lr_factor, separated by , ')
-        self.parser.add_argument('--lr_factor', type=str, default='0.1,0.05',
+        self.parser.add_argument('--lr_factor', type=str, default='0.5,0.1,0.05',
                                  help='used together with --lr_schedule, separated by , ')
         self.parser.add_argument('--eval_batch_size', type=int, default=1,
                                  help='if --train: equal to batch_size; if --eval: 1 by default')
@@ -131,10 +131,10 @@ class Param:
                                  help='euroc, kitti (determine base_dir, train/eval_sequences')
         self.parser.add_argument('--base_dir', type=str, default='/data', help='should not be specified')
         self.parser.add_argument('--train_sequences', type=str, default='2012-01-25-12-14-25,2012-04-03-07-56-24,2012-05-02-06-23-02,2012-01-28-12-38-24,2012-01-28-12-38-24,2012-01-27-07-37-01,2012-01-27-07-37-01', help='separated by , ')
-        self.parser.add_argument('--train_sequences_gt', type=str, default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part4_floor2,2012-05-02-06-23-02_part2_floor2,2012-01-28-12-38-24_part1_floor2,2012-01-28-12-38-24_part4_floor2,2012-01-27-07-37-01_part1_floor2,2012-01-27-07-37-01_part3_floor2',
+        self.parser.add_argument('--train_sequences_gt', type=str, default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part1_floor2,2012-05-02-06-23-02_part2_floor2,2012-01-28-12-38-24_part1_floor2,2012-01-28-12-38-24_part4_floor2,2012-01-27-07-37-01_part1_floor2,2012-01-27-07-37-01_part3_floor2',
                                  help='separated by , ')
         self.parser.add_argument('--eval_sequences', type=str, default='2012-04-03-07-56-24', help='separated by , ')
-        self.parser.add_argument('--eval_sequences_gt', type=str, default='2012-04-03-07-56-24_part1_floor2',
+        self.parser.add_argument('--eval_sequences_gt', type=str, default='2012-04-03-07-56-24_part4_floor2',
                                  help='separated by , ')
         self.parser.add_argument('--clip_length', type=int, default=5)
         self.parser.add_argument('--clip_overlap', action='store_const', default=False, const=True)
