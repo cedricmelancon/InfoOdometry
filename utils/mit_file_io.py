@@ -1,4 +1,5 @@
 import csv
+import math
 import numpy as np
 import pandas as pd
 from scipy.spatial.transform import Rotation as R
@@ -12,6 +13,18 @@ import PIL
 from PIL import Image
 import torch
 
+def generate_continuous_theta(dataframe):
+    for i in range(1, len(dataframe)):
+        diff = dataframe['theta'].iloc[i] - dataframe['theta'].iloc[i-1]
+        if diff > np.pi:
+            # If the transition is from -π to π, adjust the values to obtain a value greater than -π
+            dataframe.loc[i:, 'theta'] -= 2 * np.pi
+            generate_continuous_theta(dataframe)
+        elif diff < -np.pi:
+            # If the transition is from π to -π, adjust the values to obtain a positive value.
+            dataframe.loc[i:, 'theta'] += 2 * np.pi
+            generate_continuous_theta(dataframe)
+    return dataframe
 
 def read_mit_pose(base_dir, sequence_gt):
     """
@@ -20,6 +33,7 @@ def read_mit_pose(base_dir, sequence_gt):
     -> list of poses (np.array: (12,))
     """
     poses = []
+    last_theta = None
     with open('{}/ground_truth/{}.gt.laser.poses'.format(base_dir, sequence_gt), mode='r', encoding='utf-8-sig') as f:
         gt_reader = csv.reader(f, delimiter=',')
         for row in gt_reader:
@@ -30,6 +44,8 @@ def read_mit_pose(base_dir, sequence_gt):
         dataframe['x'] = dataframe['x'].astype('float64')
         dataframe['y'] = dataframe['y'].astype('float64')
         dataframe['theta'] = dataframe['theta'].astype('float64')
+
+    dataframe = generate_continuous_theta(dataframe)
 
     return dataframe
 
@@ -91,6 +107,7 @@ def get_pose_by_timestamps(poses, timestamps):
         x = np.interp(timestamps[i], poses['timestamp'], poses['x'])
         y = np.interp(timestamps[i], poses['timestamp'], poses['y'])
         theta = np.interp(timestamps[i], poses['timestamp'], poses['theta'])
+
         new_poses.append([timestamps[i], np.array([x, y, 0, 0, 0, theta])])
 
     return new_poses

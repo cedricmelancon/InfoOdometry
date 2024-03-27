@@ -109,15 +109,15 @@ def get_relative_pose(t1, t2):
     trans_t1 = t1[:3]
     euler_t1 = t1[-3:]
 
+    trans_t2 = t2[:3]
+    euler_t2 = t2[-3:]
+
     rotation_t1 = R.from_euler('zyx', np.flip(euler_t1)).as_matrix()
 
     transform_t1 = np.zeros((4, 4))
     transform_t1[:3, :3] = rotation_t1
     transform_t1[:3, 3] = trans_t1
     transform_t1[3, 3] = 1.0
-
-    trans_t2 = t2[:3]
-    euler_t2 = t2[-3:]
 
     rotation_t2 = R.from_euler('zyx', np.flip(euler_t2)).as_matrix()
 
@@ -564,18 +564,18 @@ def get_relative_pose_from_transform(t1, t2):
     euler_t1[0] = 0.0
     euler_t1[1] = 0.0
 
+    trans_t2 = t2[:3]
+    trans_t2[2] = 0.0
+    euler_t2 = t2[-3:]
+    euler_t2[0] = 0.0
+    euler_t2[1] = 0.0
+
     rotation_t1 = R.from_euler('zyx', euler_t1).as_matrix()
 
     transform_t1 = np.zeros((4, 4))
     transform_t1[:3, :3] = rotation_t1
     transform_t1[:3, 3] = trans_t1
     transform_t1[3, 3] = 1.0
-
-    trans_t2 = t2[:3]
-    trans_t2[2] = 0.0
-    euler_t2 = t2[-3:]
-    euler_t2[0] = 0.0
-    euler_t2[1] = 0.0
 
     rotation_t2 = R.from_euler('zyx', euler_t2).as_matrix()
 

@@ -390,11 +390,11 @@ def train(args):
             
             pred_rel_poses = bottle(pose_model, (posterior_states, ))
             #pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, :2] * 1000, y_rel_poses[:, :, :2] * 1000, reduction='none').sum(dim=2).mean(dim=(0, 1))
-            pose_trans_loss_x = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, :1]*10000, y_rel_poses[:,:,:1]*10000, reduction='none').sum(dim=2).mean(dim=(0,1))
-            pose_trans_loss_y = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, 1:2] * 10000, y_rel_poses[:, :, 1:2] * 10000, reduction='none').sum(dim=2).mean(dim=(0, 1))
+            pose_trans_loss_x = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, :1], y_rel_poses[:,:,:1], reduction='none').sum(dim=2).mean(dim=(0,1))
+            pose_trans_loss_y = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, 1:2], y_rel_poses[:, :, 1:2], reduction='none').sum(dim=2).mean(dim=(0, 1))
             #pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3], y_rel_poses[:, :, :3],
             #                                                       reduction='none').sum(dim=2).mean(dim=(0, 1))
-            pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,-1:]*1000, y_rel_poses[:,:,-1:]*1000, reduction='none').sum(dim=2).mean(dim=(0,1))
+            pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,-1:], y_rel_poses[:,:,-1:], reduction='none').sum(dim=2).mean(dim=(0,1))
             #pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
             #                                                  reduction='none').sum(dim=2).mean(dim=(0, 1))
 
@@ -543,13 +543,13 @@ def train(args):
                                 # kl_loss += args.global_kl_beta * kl_divergence(Normal(posterior_means, posterior_std_devs), tmp_global_prior).sum(dim=2).mean(dim=(0,1))
                                 kl_loss += kl_divergence(Normal(posterior_means, posterior_std_devs), tmp_global_prior).sum(dim=2).mean(dim=(0,1))
 
-                    pose_trans_loss_x = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, :1] * 10000., y_rel_poses[:, :, :1] * 10000, reduction='none').sum(dim=2).mean(dim=(0, 1))
-                    pose_trans_loss_y = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, 1:2] * 10000., y_rel_poses[:, :, 1:2] * 10000, reduction='none').sum(dim=2).mean(dim=(0, 1))
+                    pose_trans_loss_x = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, :1], y_rel_poses[:, :, :1], reduction='none').sum(dim=2).mean(dim=(0, 1))
+                    pose_trans_loss_y = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, 1:2], y_rel_poses[:, :, 1:2], reduction='none').sum(dim=2).mean(dim=(0, 1))
                     #pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:2]*1000., y_rel_poses[:,:,:2]*1000, reduction='none').sum(dim=2).mean(dim=(0,1))
                     #pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3],
                     #                                                       y_rel_poses[:, :, :3], reduction='none').sum(
                     #    dim=2).mean(dim=(0, 1))
-                    pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,-1:]*1000, y_rel_poses[:,:,-1:]*1000, reduction='none').sum(dim=2).mean(dim=(0,1))
+                    pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,-1:], y_rel_poses[:,:,-1:], reduction='none').sum(dim=2).mean(dim=(0,1))
                     #pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
                     #                                                  reduction='none').sum(dim=2).mean(dim=(0, 1))
 
@@ -602,7 +602,7 @@ def train(args):
             out_eval = dict()
             for _loss in loss_list:
                 out_eval[_loss] = loss_avg[_loss].item()
-                writer.add_scalar('eval/{}'.format(_loss), out_eval[_loss], epoch_idx)
+                writer.add_scalar('eval/{}_'.format(_loss), out_eval[_loss], epoch_idx)
             out_eval['rpe_rot_axis'] = np.mean(np.array(list_eval['rpe_rot_axis']))
             writer.add_scalar('eval_sqrt_then_avg/rpe_rot_axis', out_eval['rpe_rot_axis'], epoch_idx)
             for _met in ['rpe_all', 'rpe_trans', 'rpe_rot_euler']:
