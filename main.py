@@ -266,7 +266,7 @@ def train(args):
             # transitions start at time t = 0 
             # create initial belief and state for time t = 0
             init_state = torch.zeros(running_batch_size, args.state_size, device=args.device)
-            init_belief = torch.zeros(running_batch_size, args.belief_size, device=args.device)
+            init_belief = torch.rand(running_batch_size, args.belief_size, device=args.device)
                
             # if we use flownet_feature as reconstructed observations -> no need for dequantization
             with torch.no_grad():
@@ -414,7 +414,8 @@ def train(args):
                 if args.observation_beta != 0: writer.add_scalar('train/observation_visual_loss', observation_loss.item(), curr_iter)
                 if use_imu and args.observation_imu_beta != 0: writer.add_scalar('train/observation_imu_loss', observation_imu_loss.item(), curr_iter)
                 writer.add_scalar('train/kl_loss', kl_loss.item(), curr_iter)
-            writer.add_scalar('train/pose_trans_loss', pose_trans_loss_x.item() + pose_trans_loss_y.item(), curr_iter)
+            writer.add_scalar('train/pose_trans_loss_x', pose_trans_loss_x.item(), curr_iter)
+            writer.add_scalar('train/pose_trans_loss_y', pose_trans_loss_y.item(), curr_iter)
             writer.add_scalar('train/pose_rot_loss', pose_rot_loss.item(), curr_iter)
             writer.add_scalar('train/learning_rate', get_lr(optimizer), curr_iter)
             curr_iter += 1
@@ -447,7 +448,7 @@ def train(args):
                 batch_timer = SequenceTimer()
                 last_batch_index = len(eval_clips) - 1
                 loss_avg = dict()
-                loss_list = ['total_loss', 'pose_trans_loss', 'pose_rot_loss']
+                loss_list = ['total_loss', 'pose_trans_loss_x', 'pose_trans_loss_y', 'pose_rot_loss']
                 last_pose = None
 
                 if use_info:
@@ -460,6 +461,8 @@ def train(args):
                 for _met in ['rpe', 'ate']:
                     for _suf in ['_all', '_trans', '_rot_axis', '_rot_euler']:
                         list_eval['{}{}'.format(_met, _suf)] = []
+
+                beliefs = None
                 for batch_idx, batch_data in enumerate(eval_clips):
                     if args.debug and batch_idx >= 10:
                         break
@@ -477,8 +480,12 @@ def train(args):
                         x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=args.device)
                     running_eval_batch_size = x_img_pairs.size()[1] # might be different at the last batch
                     init_state = torch.zeros(running_eval_batch_size, args.state_size, device=args.device)
-                    init_belief = torch.zeros(running_eval_batch_size, args.belief_size, device=args.device)
-                    
+
+                    if beliefs is None:
+                        beliefs = torch.rand(running_eval_batch_size, args.belief_size, device=args.device)
+                    else:
+                        beliefs = beliefs[1, :]
+
                     observations = x_img_pairs if args.img_prefeat == 'flownet' else bottle(flownet_model, (x_img_pairs, ))
                     obs_size = observations.size()
                     observations = observations.view(obs_size[0], obs_size[1], -1)
@@ -494,7 +501,7 @@ def train(args):
                     beliefs, prior_states, prior_means, prior_std_devs, posterior_states, posterior_means, posterior_std_devs, pred_rel_poses = transition_model(
                         prev_state=init_state, # not used if not use_info
                         poses=pose_model, 
-                        prev_belief=init_belief,
+                        prev_belief=beliefs,
                         observations=encode_observations
                     )
                     
@@ -564,7 +571,8 @@ def train(args):
                         if args.observation_beta != 0: loss_avg['observation_visual_loss'].append(observation_loss)
                         if use_imu and args.observation_imu_beta != 0: loss_avg['observation_imu_loss'].append(observation_imu_loss)
                         loss_avg['kl_loss'].append(kl_loss)
-                    loss_avg['pose_trans_loss'].append(pose_trans_loss_x + pose_trans_loss_y)
+                    loss_avg['pose_trans_loss_x'].append(pose_trans_loss_x)
+                    loss_avg['pose_trans_loss_y'].append(pose_trans_loss_y)
                     loss_avg['pose_rot_loss'].append(pose_rot_loss)
                     
                     for _fidx in range(args.clip_length):
@@ -581,8 +589,8 @@ def train(args):
                         writer.add_scalars(f'test/rel_{_met}', {'eval': test_rel[_met], 'gt': gt_rel[_met]}, batch_idx)
                         writer.add_scalar(f'test/rel_err_{_met}', err_rel[_met], batch_idx)
 
-                    writer.add_scalar('eval/pose_trans_loss', pose_trans_loss_x.item() + pose_trans_loss_y.item(),
-                                      curr_eval_iter)
+                    writer.add_scalar('eval/pose_trans_loss_x', pose_trans_loss_x.item(), curr_eval_iter)
+                    writer.add_scalar('eval/pose_trans_loss_y', pose_trans_loss_y.item(), curr_eval_iter)
                     writer.add_scalar('eval/pose_rot_loss', pose_rot_loss.item(), curr_eval_iter)
                     curr_eval_iter += 1
                     save_data(eval_csvwriter, total_loss, y_glob_poses, y_rel_poses, new_pose, pred_rel_poses, epoch_idx, batch_idx)
@@ -641,7 +649,7 @@ def train(args):
             print('====================================')
             print('current epoch for sqrt_then_avg')
             print('====================================')
-            loss_str = 'pose_trans_loss: {:.5f} | pose_rot_loss: {:.5f}'.format(out_eval['pose_trans_loss'], out_eval['pose_rot_loss'])
+            loss_str = 'pose_trans_loss: {:.5f} | pose_rot_loss: {:.5f}'.format(out_eval['pose_trans_loss_x'] + out_eval['pose_trans_loss_y'], out_eval['pose_rot_loss'])
             if use_info:
                 loss_str = 'kl_loss: {:.5f} \n{}'.format( out_eval['kl_loss'], loss_str)
                 if use_imu and args.observation_imu_beta != 0: loss_str = 'observation_imu_loss: {:.5f} | {}'.format(out_eval['observation_imu_loss'], loss_str)
@@ -652,7 +660,7 @@ def train(args):
             print('====================================')
             print('best epoch for sqrt_then_avg')
             print('====================================')
-            loss_str = 'pose_trans_loss: {:.5f} | pose_rot_loss: {:.5f}'.format(best_metrics['sqrt_then_avg']['pose_trans_loss'], best_metrics['sqrt_then_avg']['pose_rot_loss'])
+            loss_str = 'pose_trans_loss: {:.5f} | pose_rot_loss: {:.5f}'.format(best_metrics['sqrt_then_avg']['pose_trans_loss_x'] + best_metrics['sqrt_then_avg']['pose_trans_loss_y'], best_metrics['sqrt_then_avg']['pose_rot_loss'])
             if use_info:
                 loss_str = 'kl_loss: {:.5f} \n{}'.format(best_metrics['sqrt_then_avg']['kl_loss'], loss_str)
                 if use_imu and args.observation_imu_beta != 0: loss_str = 'observation_imu_loss: {:.5f} | {}'.format(best_metrics['sqrt_then_avg']['observation_imu_loss'], loss_str)

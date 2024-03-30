@@ -5,6 +5,7 @@ from torch.nn import functional as F
 from info_model import flownet_featsize
 from info_model import PoseModel
 
+
 class SeqVINet(nn.Module):
     def __init__(self, args, belief_size, state_size, hidden_size, embedding_size, use_imu, activation_function='relu'):
         """
@@ -53,7 +54,7 @@ class SeqVINet(nn.Module):
             elif args.hard_mode == 'gumbel_soft':
                 self.onehot_hard = False
             self.eps = 1e-10
-        
+
     # Operates over (previous) state, (previous) poses, (previous) belief, (previous) nonterminals (mask), and (current) observations
     # Diagram of expected inputs and outputs for T = 5 (-x- signifying beginning of output belief/state that gets sliced off):
     # t :  0  1  2  3  4  5
@@ -80,7 +81,7 @@ class SeqVINet(nn.Module):
         fusion_hiddens[0], fusion_features[0] = prev_belief, prev_belief
         if self.args.belief_rnn == 'lstm':
             fusion_lstm_hiddens = fusion_hiddens = [torch.empty(0)] * T
-            fusion_lstm_hiddens[0] = (prev_belief.unsqueeze(0).repeat(2,1,1), prev_belief.unsqueeze(0).repeat(2,1,1))
+            fusion_lstm_hiddens[0] = (prev_belief.unsqueeze(0).repeat(2, 1, 1), prev_belief.unsqueeze(0).repeat(2, 1, 1))
         
         if self.use_imu:
             running_batch_size = prev_belief.size()[0]
@@ -135,7 +136,7 @@ class SeqVINet(nn.Module):
                 with torch.no_grad():
                     pred_poses[t_ + 1] = poses(out_features[t_ + 1])
         
-        hidden = [None, None, None, None, torch.stack(out_features, dim=0), None, None]
+        hidden = [torch.stack(fusion_features, dim=0), None, None, None, torch.stack(out_features, dim=0), None, None]
         if use_pose_model:
             hidden += [torch.stack(pred_poses, dim=0)]
             if self.args.eval_uncertainty: hidden += [None]

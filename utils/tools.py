@@ -516,45 +516,45 @@ def eval_rel_error(pred_rel_pose, gt_rel_pose, t_euler_loss):
 
 
 def get_absolute_pose(dt, state):
-        clip_size = dt.size()[0]
-        result = [torch.empty(0)] * clip_size
+    clip_size = dt.size()[0]
+    result = [torch.empty(0)] * clip_size
 
-        last_state = state #.unsqueeze(0)
-        for i in range(clip_size):
-            if i > 0:
-                last_state = result[i - 1].unsqueeze(0)
+    last_state = state
+    for i in range(clip_size):
+        if i > 0:
+            last_state = result[i - 1].unsqueeze(0)
 
-            trans_state = last_state[:, :, :3]
-            euler_state = last_state[:, :, -3:]
-            euler_state = torch.flip(euler_state, (2,))
+        trans_state = last_state[:, :, :3]
+        euler_state = last_state[:, :, -3:]
+        euler_state = torch.flip(euler_state, (2,))
 
-            rotation_state = euler_angles_to_matrix(euler_state, 'ZYX')
+        rotation_state = euler_angles_to_matrix(euler_state, 'ZYX')
 
-            transform_state = torch.zeros(4, 4, device='cuda:0')
-            transform_state[:3, :3] = rotation_state
-            transform_state[:3, 3] = trans_state
-            transform_state[3, 3] = 1.0
+        transform_state = torch.zeros(4, 4, device='cuda:0')
+        transform_state[:3, :3] = rotation_state
+        transform_state[:3, 3] = trans_state
+        transform_state[3, 3] = 1.0
 
-            delta_trans = dt[i, :, :3].squeeze(1)
-            delta_euler = dt[i, :, -3:].squeeze(1)
-            rotation_dt = euler_angles_to_matrix(torch.flip(delta_euler, (1,)), 'ZYX')
-            transform_dt = torch.zeros(4, 4, device='cuda:0')
-            transform_dt[:3, :3] = rotation_dt
-            transform_dt[:3, 3] = delta_trans
-            transform_dt[3, 3] = 1.0
+        delta_trans = dt[i, :, :3].squeeze(1)
+        delta_euler = dt[i, :, -3:].squeeze(1)
+        rotation_dt = euler_angles_to_matrix(torch.flip(delta_euler, (1,)), 'ZYX')
+        transform_dt = torch.zeros(4, 4, device='cuda:0')
+        transform_dt[:3, :3] = rotation_dt
+        transform_dt[:3, 3] = delta_trans
+        transform_dt[3, 3] = 1.0
 
-            transform_result = torch.mm(transform_state, transform_dt)
+        transform_result = torch.mm(transform_state, transform_dt)
 
-            euler_result = torch.flip(matrix_to_euler_angles(transform_result[:3, :3], 'ZYX'), (0,))
+        euler_result = torch.flip(matrix_to_euler_angles(transform_result[:3, :3], 'ZYX'), (0,))
 
-            trans_result = transform_result[:3, 3]
-            euler_result[0] = 0.0
-            euler_result[1] = 0.0
-            trans_result[2] = 0.0
+        trans_result = transform_result[:3, 3]
+        euler_result[0] = 0.0
+        euler_result[1] = 0.0
+        trans_result[2] = 0.0
 
-            result[i] = torch.concat((trans_result, euler_result), 0).unsqueeze(0)
+        result[i] = torch.concat((trans_result, euler_result), 0).unsqueeze(0)
 
-        return torch.stack(result, dim=0)
+    return torch.stack(result, dim=0)
 
 
 def get_relative_pose_from_transform(t1, t2):

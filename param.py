@@ -39,8 +39,8 @@ class Param:
                                  help='kl weight for posterior and prior states in the world model')
         self.parser.add_argument('--global_kl_beta', type=float, default=0, help='global kl weight (0 to disable)')
         self.parser.add_argument('--eval_ckp', type=str, default='best', help='best, last')
-        self.parser.add_argument('--translation_weight', type=float, default=1000, help='weight for translation_loss')
-        self.parser.add_argument('--rotation_weight', type=float, default=100, help='weight for rotation_loss')
+        self.parser.add_argument('--translation_weight', type=float, default=10000, help='weight for translation_loss')
+        self.parser.add_argument('--rotation_weight', type=float, default=10000, help='weight for rotation_loss')
 
         # for soft / hard deepvio baselines
         self.parser.add_argument('--soft', action='store_const', default=False, const=True)
@@ -61,7 +61,7 @@ class Param:
         self.parser.add_argument('--activation_function', type=str, default='tanh', choices=dir(F),
                                  help='model activation function')
         self.parser.add_argument('--embedding_size', type=int, default=1024, help='observation embedding size')
-        self.parser.add_argument('--hidden_size', type=int, default=1024, help='hidden size')
+        self.parser.add_argument('--hidden_size', type=int, default=512, help='hidden size')
         self.parser.add_argument('--belief_size', type=int, default=512, help='belief/hidden size')
         self.parser.add_argument('--belief_rnn', type=str, default='gru', help='lstm or gru')
         self.parser.add_argument('--state_size', type=int, default=256, help='state/latent size')

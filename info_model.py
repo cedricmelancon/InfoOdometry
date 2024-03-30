@@ -1187,7 +1187,6 @@ class PoseModel(nn.Module):
         self.dropout = nn.Dropout(0.4)
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
-        #self.fc3_trans = nn.Linear(hidden_size, 2)
         self.fc3_trans_x = nn.Linear(hidden_size, hidden_size)
         self.fc4_trans_x = nn.Linear(hidden_size, 1)
         self.fc3_trans_y = nn.Linear(hidden_size, hidden_size)
@@ -1200,7 +1199,6 @@ class PoseModel(nn.Module):
     def forward(self, state):
         hidden = self.act_fn(self.dropout(self.fc1(state)))
         hidden = self.act_fn(self.dropout(self.fc2(hidden)))
-        #trans = self.fc3_trans(hidden)
         trans_x = self.act_fn(self.dropout(self.fc3_trans_x(hidden)))
         trans_x = self.fc4_trans_x(trans_x)
         trans_y = self.act_fn(self.dropout(self.fc3_trans_y(hidden)))
