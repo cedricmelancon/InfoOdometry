@@ -40,7 +40,7 @@ class Param:
         self.parser.add_argument('--global_kl_beta', type=float, default=0, help='global kl weight (0 to disable)')
         self.parser.add_argument('--eval_ckp', type=str, default='best', help='best, last')
         self.parser.add_argument('--translation_weight', type=float, default=10000, help='weight for translation_loss')
-        self.parser.add_argument('--rotation_weight', type=float, default=10000, help='weight for rotation_loss')
+        self.parser.add_argument('--rotation_weight', type=float, default=1000, help='weight for rotation_loss')
 
         # for soft / hard deepvio baselines
         self.parser.add_argument('--soft', action='store_const', default=False, const=True)
@@ -58,7 +58,7 @@ class Param:
 
         # args for training information models
         self.parser.add_argument('--seed', type=int, default=666, help='random seed')
-        self.parser.add_argument('--activation_function', type=str, default='tanh', choices=dir(F),
+        self.parser.add_argument('--activation_function', type=str, default='relu', choices=dir(F),
                                  help='model activation function')
         self.parser.add_argument('--embedding_size', type=int, default=1024, help='observation embedding size')
         self.parser.add_argument('--hidden_size', type=int, default=512, help='hidden size')
@@ -105,9 +105,9 @@ class Param:
         self.parser.add_argument('--lr', type=float, default=5e-4)
         self.parser.add_argument('--lr_warmup', action='store_const', default=False, const=True)
         self.parser.add_argument('--n_warmup_steps', type=int, default=12800)
-        self.parser.add_argument('--lr_schedule', type=str, default='20,75,100',
+        self.parser.add_argument('--lr_schedule', type=str, default='50,85,115,150',
                                  help='epoch to reduce lr to intial_lr times the corresponding lr_factor, separated by , ')
-        self.parser.add_argument('--lr_factor', type=str, default='0.2,0.1,0.05',
+        self.parser.add_argument('--lr_factor', type=str, default='0.2,0.1,0.5,0.1',
                                  help='used together with --lr_schedule, separated by , ')
         self.parser.add_argument('--eval_batch_size', type=int, default=1,
                                  help='if --train: equal to batch_size; if --eval: 1 by default')
@@ -332,7 +332,7 @@ class Param:
 
     def check_eligibility(self):
         # check eligibility
-        if self.args.optimizer not in {'adam', 'sgd'}:
+        if self.args.optimizer not in {'adam', 'sgd', 'rmsprop'}:
             raise ValueError(
                 'optimizer {} is illegal. Currently only adam and sgd are allowed.'.format(self.args.optimizer))
 
