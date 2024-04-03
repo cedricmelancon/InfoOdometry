@@ -37,13 +37,13 @@ from dataset.vkitti2_dataset import load_vkitti2_clips
 from info_model import bottle
 
 
-def save_data(writer, loss, labels_global, labels_delta, pred_rel, pred_abs, epoch, n_iter):
+def save_data(writer, loss, labels_global, labels_delta, pred_abs, pred_rel, epoch, n_iter):
     row = np.concatenate((np.array([epoch, n_iter]),
                           loss.cpu().detach().numpy(),
                           labels_global.cpu().detach().numpy()[-1, :],
                           labels_delta.cpu().detach().numpy()[-1, :],
                           pred_rel.cpu().detach().numpy()[-1, :],
-                          pred_abs.cpu().detach().numpy()[-1, :]), axis=None)
+                          pred_abs), axis=None)
     writer.writerow(row)
 
 
@@ -452,6 +452,7 @@ def train(args):
                 loss_avg = dict()
                 loss_list = ['total_loss', 'pose_trans_loss_x', 'pose_trans_loss_y', 'pose_rot_loss']
                 last_pose = None
+                last_gt_pose = None
 
                 if use_info:
                     loss_list += ['kl_loss']
@@ -477,6 +478,7 @@ def train(args):
 
                     if last_pose is None:
                         last_pose = y_glob_poses[0].unsqueeze(0)
+                        last_gt_pose = y_glob_poses[0].unsqueeze(0)
 
                     if use_imu or args.imu_only: 
                         x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=args.device)
@@ -583,10 +585,12 @@ def train(args):
                         for _met in ['rpe_all', 'rpe_trans', 'rpe_rot_axis', 'rpe_rot_euler']:
                             list_eval[_met].extend(eval_rel[_met])
 
-                    new_pose = get_absolute_pose(pred_rel_poses, last_pose).unsqueeze(1)
-                    eval_glob, gt_glob, err_glob = eval_global_error(new_pose[-1], y_global_pose_list[-1])
+                    new_pose = get_absolute_pose(pred_rel_poses, last_pose)
+                    new_gt_pose = get_absolute_pose(y_rel_poses, last_gt_pose)
+
+                    eval_glob, gt_glob, err_glob, test_glob = eval_global_error(new_pose[-1], y_global_pose_list[-1].squeeze(0).cpu().numpy(), new_gt_pose[-1])
                     for _met in ['x', 'y', 'theta']:
-                        writer.add_scalars(f'test/abs_{_met}', { 'eval': eval_glob[_met], 'gt': gt_glob[_met] }, batch_idx)
+                        writer.add_scalars(f'test/abs_{_met}', { 'eval': eval_glob[_met], 'gt': gt_glob[_met], 'test': test_glob[_met] }, batch_idx)
                         writer.add_scalar(f'test/abs_err_{_met}', err_glob[_met], batch_idx)
                         writer.add_scalars(f'test/rel_{_met}', {'eval': test_rel[_met], 'gt': gt_rel[_met]}, batch_idx)
                         writer.add_scalar(f'test/rel_err_{_met}', err_rel[_met], batch_idx)
@@ -595,8 +599,16 @@ def train(args):
                     writer.add_scalar('eval/pose_trans_loss_y', pose_trans_loss_y.item(), curr_eval_iter)
                     writer.add_scalar('eval/pose_rot_loss', pose_rot_loss.item(), curr_eval_iter)
                     curr_eval_iter += 1
-                    save_data(eval_csvwriter, total_loss, y_glob_poses, y_rel_poses, new_pose, pred_rel_poses, epoch_idx, batch_idx)
-                    last_pose = new_pose[1]
+                    save_data(eval_csvwriter,
+                              total_loss,
+                              y_glob_poses,
+                              y_rel_poses,
+                              new_pose,
+                              pred_rel_poses,
+                              epoch_idx,
+                              batch_idx)
+                    last_pose = torch.from_numpy(new_pose[0])
+                    last_gt_pose = torch.from_numpy(new_gt_pose[0])
 
                     batch_timer.tictoc()
                     remain_time = batch_timer.get_remaining_time(batch_idx, last_batch_index)

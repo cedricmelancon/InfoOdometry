@@ -22,6 +22,7 @@ from utils.mit_file_io import get_pose_by_timestamps
 from utils.mit_file_io import get_mit_depthpair
 
 from utils.tools import get_relative_pose
+from utils.tools import get_absolute_pose_step
 from utils.tools import get_zero_se3
 from utils.tools import euler_to_quaternion
 from utils.tools import rotationMatrixToEulerAngles
@@ -475,7 +476,8 @@ class MitStataCenterDataset(torch.utils.data.Dataset):
             tmp_seq['imus'].append(_imu)
             tmp_seq['imgs'].append(imgs[_i + 1])
             tmp_seq['global_poses'].append([poses[_i + 1][0], tq_ip1])
-            tmp_seq['rel_poses'].append([poses[_i + 1][0], get_relative_pose(tq_i, tq_ip1)])
+            dt = get_relative_pose(tq_i, tq_ip1)
+            tmp_seq['rel_poses'].append([poses[_i + 1][0], dt])
 
         # append the last sub_seq
         if len(tmp_seq['imus']) > 0:

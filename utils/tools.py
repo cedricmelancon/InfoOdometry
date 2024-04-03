@@ -112,14 +112,14 @@ def get_relative_pose(t1, t2):
     trans_t2 = t2[:3]
     euler_t2 = t2[-3:]
 
-    rotation_t1 = R.from_euler('zyx', np.flip(euler_t1)).as_matrix()
+    rotation_t1 = R.from_euler('zyx', np.flip(euler_t1, 0)).as_matrix()
 
     transform_t1 = np.zeros((4, 4))
     transform_t1[:3, :3] = rotation_t1
     transform_t1[:3, 3] = trans_t1
     transform_t1[3, 3] = 1.0
 
-    rotation_t2 = R.from_euler('zyx', np.flip(euler_t2)).as_matrix()
+    rotation_t2 = R.from_euler('zyx', np.flip(euler_t2, 0)).as_matrix()
 
     transform_t2 = np.zeros((4, 4))
     transform_t2[:3, :3] = rotation_t2
@@ -459,45 +459,46 @@ def eval_rel_error(pred_rel_pose, gt_rel_pose, t_euler_loss):
             tmp_pred_rel_pose = pred_rel_pose[_i].cpu().numpy()
             tmp_gt_rel_pose = gt_rel_pose[_i].cpu().numpy()
 
-        if t_euler_loss:
-            # transform t_euler to se3
-            tmp_pred_t = tmp_pred_rel_pose[0:3]
-            tmp_pred_euler = tmp_pred_rel_pose[3:]
-            tmp_pred_quat = euler_to_quaternion(tmp_pred_euler)
-            tmp_pred_rel_pose = pose_tq_to_se(np.concatenate((tmp_pred_t, tmp_pred_quat)))
+        #if t_euler_loss:
+        #    # transform t_euler to se3
+        #    tmp_pred_t = tmp_pred_rel_pose[0:3]
+        #    tmp_pred_euler = tmp_pred_rel_pose[3:]
+        #    tmp_pred_quat = euler_to_quaternion(tmp_pred_euler)
+        #    tmp_pred_rel_pose = pose_tq_to_se(np.concatenate((tmp_pred_t, tmp_pred_quat)))
 
-            tmp_gt_t = tmp_gt_rel_pose[0:3]
-            tmp_gt_euler = tmp_gt_rel_pose[3:]
-            tmp_gt_quat = euler_to_quaternion(tmp_gt_euler)
-            tmp_gt_rel_pose = pose_tq_to_se(np.concatenate((tmp_gt_t, tmp_gt_quat)))
+        #    tmp_gt_t = tmp_gt_rel_pose[0:3]
+        #    tmp_gt_euler = tmp_gt_rel_pose[3:]
+        #    tmp_gt_quat = euler_to_quaternion(tmp_gt_euler)
+        #    tmp_gt_rel_pose = pose_tq_to_se(np.concatenate((tmp_gt_t, tmp_gt_quat)))
 
-        se_pred = sp.Vector6(*list(tmp_pred_rel_pose))
-        se_gt = sp.Vector6(*list(tmp_gt_rel_pose))
+        #se_pred = sp.Vector6(*list(tmp_pred_rel_pose))
+        #se_gt = sp.Vector6(*list(tmp_gt_rel_pose))
 
-        T_01_pred = sp.Se3.exp(se_pred)
+        #T_01_pred = sp.Se3.exp(se_pred)
 
-        if se_gt[3] == se_gt[4] == se_gt[5] == 0:
-            T_01_gt = T_01_pred
-        else:
-            T_01_gt = sp.Se3.exp(se_gt)
+        #if se_gt[3] == se_gt[4] == se_gt[5] == 0:
+        #    T_01_gt = T_01_pred
+        #else:
+        #    T_01_gt = sp.Se3.exp(se_gt)
 
         ## calculate eval_rel for v1 (from TT')
-        T_01_rel = T_01_gt.inverse() * T_01_pred  # Se3 object
-        tmp_rpe_all = np.sum(np.array(T_01_rel.log(), dtype=float) ** 2)  # (4.46) in SLAM12
-        tmp_trans = np.array(T_01_rel.t, dtype=float)
-        tmp_rpe_trans = np.sum(np.array(T_01_rel.t, dtype=float) ** 2)  # (4.47) in SLAM12
-        eval_rel['rpe_all'].append(np.array(tmp_rpe_all))
-        eval_rel['rpe_trans'].append(np.array(tmp_rpe_trans))
+        #T_01_rel = T_01_gt.inverse() * T_01_pred  # Se3 object
+        T_01_rel = get_relative_pose(tmp_gt_rel_pose, tmp_pred_rel_pose)
+        #tmp_rpe_all = np.sum(np.array(T_01_rel.log(), dtype=float) ** 2)  # (4.46) in SLAM12
+        #tmp_trans = np.array(T_01_rel.t, dtype=float)
+        #tmp_rpe_trans = np.sum(np.array(T_01_rel.t, dtype=float) ** 2)  # (4.47) in SLAM12
+        #eval_rel['rpe_all'].append(np.array(tmp_rpe_all))
+        #eval_rel['rpe_trans'].append(np.array(tmp_rpe_trans))
 
-        axis_01_rel = np.linalg.norm(np.array(T_01_rel.so3.log(), dtype=float))
+        #axis_01_rel = np.linalg.norm(np.array(T_01_rel.so3.log(), dtype=float))
         #axis_01_rel = axis_01_rel / np.pi * 180  # transform to degrees
-        eval_rel['rpe_rot_axis'].append(np.array(axis_01_rel))
+        #eval_rel['rpe_rot_axis'].append(np.array(axis_01_rel))
 
-        euler_01_rel = np.array(T_01_rel.so3.matrix(), dtype=float)
-        euler_01_rel = rotationMatrixToEulerAngles(euler_01_rel)
+        #euler_01_rel = np.array(T_01_rel.so3.matrix(), dtype=float)
+        #euler_01_rel = rotationMatrixToEulerAngles(euler_01_rel)
         #euler_01_rel = euler_01_rel / np.pi * 180  # transform to degrees
-        tmp_euler = np.sum(euler_01_rel ** 2)
-        eval_rel['rpe_rot_euler'].append(tmp_euler)
+        #tmp_euler = np.sum(euler_01_rel ** 2)
+        #eval_rel['rpe_rot_euler'].append(tmp_euler)
 
     test_rel['x'].append(pred_rel_pose[-1, 0].cpu().numpy())
     test_rel['y'].append(pred_rel_pose[-1, 1].cpu().numpy())
@@ -507,54 +508,65 @@ def eval_rel_error(pred_rel_pose, gt_rel_pose, t_euler_loss):
     gt_rel['y'].append(gt_rel_pose[-1, 1].cpu().numpy())
     gt_rel['theta'].append(gt_rel_pose[-1, 5].cpu().numpy())
 
-    err_rel['x'].append(tmp_trans[0])
-    err_rel['y'].append(tmp_trans[1])
-    err_rel['theta'].append(euler_01_rel[2])
+    err_rel['x'].append(T_01_rel[0])
+    err_rel['y'].append(T_01_rel[1])
+    err_rel['theta'].append(T_01_rel[5])
 
     # each value in eval_rel: a list  with length eval_batch_size
     return eval_rel, test_rel, gt_rel, err_rel
+
+
+def get_absolute_pose_step(dt, state):
+    trans_state = state[:3]
+    trans_state[2] = 0.0
+    euler_state = state[-3:]
+    euler_state[0] = 0.0
+    euler_state[1] = 0.0
+
+    trans_dt = dt[:3]
+    trans_dt[2] = 0.0
+    euler_dt = dt[-3:]
+    euler_dt[0] = 0.0
+    euler_dt[1] = 0.0
+
+    rotation_state = R.from_euler('zyx', np.flip(euler_state, 0)).as_matrix()
+
+    transform_state = np.zeros((4, 4))
+    transform_state[:3, :3] = rotation_state
+    transform_state[:3, 3] = trans_state
+    transform_state[3, 3] = 1.0
+
+    rotation_dt = R.from_euler('zyx', np.flip(euler_dt, 0)).as_matrix()
+
+    transform_dt = np.zeros((4, 4))
+    transform_dt[:3, :3] = rotation_dt
+    transform_dt[:3, 3] = trans_dt
+    transform_dt[3, 3] = 1.0
+
+    transform_result = np.dot(transform_state, transform_dt)
+
+    euler_result = np.flip(R.from_matrix(transform_result[:3, :3]).as_euler('zyx'), 0)
+    trans_result = transform_result[:3, 3]
+    euler_result[0] = 0.0
+    euler_result[1] = 0.0
+    trans_result[2] = 0.0
+
+    return np.concatenate((trans_result, euler_result), 0)
 
 
 def get_absolute_pose(dt, state):
     clip_size = dt.size()[0]
     result = [torch.empty(0)] * clip_size
 
-    last_state = state
+    last_state = state.squeeze(0).squeeze(0).cpu().numpy()
     for i in range(clip_size):
         if i > 0:
-            last_state = result[i - 1].unsqueeze(0)
+            last_state = result[i - 1]
 
-        trans_state = last_state[:, :, :3]
-        euler_state = last_state[:, :, -3:]
-        euler_state = torch.flip(euler_state, (2,))
+        value = get_absolute_pose_step(dt[i].squeeze(0).cpu().numpy(), last_state)
+        result[i] = value
 
-        rotation_state = euler_angles_to_matrix(euler_state, 'ZYX')
-
-        transform_state = torch.zeros(4, 4, device='cuda:0')
-        transform_state[:3, :3] = rotation_state
-        transform_state[:3, 3] = trans_state
-        transform_state[3, 3] = 1.0
-
-        delta_trans = dt[i, :, :3].squeeze(1)
-        delta_euler = dt[i, :, -3:].squeeze(1)
-        rotation_dt = euler_angles_to_matrix(torch.flip(delta_euler, (1,)), 'ZYX')
-        transform_dt = torch.zeros(4, 4, device='cuda:0')
-        transform_dt[:3, :3] = rotation_dt
-        transform_dt[:3, 3] = delta_trans
-        transform_dt[3, 3] = 1.0
-
-        transform_result = torch.mm(transform_state, transform_dt)
-
-        euler_result = torch.flip(matrix_to_euler_angles(transform_result[:3, :3], 'ZYX'), (0,))
-
-        trans_result = transform_result[:3, 3]
-        euler_result[0] = 0.0
-        euler_result[1] = 0.0
-        trans_result[2] = 0.0
-
-        result[i] = torch.concat((trans_result, euler_result), 0).unsqueeze(0)
-
-    return torch.stack(result, dim=0)
+    return result
 
 
 def get_relative_pose_from_transform(t1, t2):
@@ -570,22 +582,21 @@ def get_relative_pose_from_transform(t1, t2):
     euler_t2[0] = 0.0
     euler_t2[1] = 0.0
 
-    rotation_t1 = R.from_euler('zyx', euler_t1).as_matrix()
-
+    rotation_t1 = R.from_euler('zyx', np.flip(euler_t1, 0)).as_matrix()
     transform_t1 = np.zeros((4, 4))
     transform_t1[:3, :3] = rotation_t1
     transform_t1[:3, 3] = trans_t1
     transform_t1[3, 3] = 1.0
 
-    rotation_t2 = R.from_euler('zyx', euler_t2).as_matrix()
+    rotation_t2 = R.from_euler('zyx', np.flip(euler_t2, 0)).as_matrix()
 
     transform_t2 = np.zeros((4, 4))
     transform_t2[:3, :3] = rotation_t2
     transform_t2[:3, 3] = trans_t2
     transform_t2[3, 3] = 1.0
 
-    transform_result = np.dot(np.linalg.inv(transform_t2), transform_t1)
-    euler_result = R.from_matrix(transform_result[:3, :3]).as_euler('zyx')
+    transform_result = np.dot(np.linalg.inv(transform_t1), transform_t2)
+    euler_result = np.flip(R.from_matrix(transform_result[:3, :3]).as_euler('zyx'), 0)
     trans_result = transform_result[:3, 3]
     euler_result[0] = 0.0
     euler_result[1] = 0.0
@@ -594,7 +605,7 @@ def get_relative_pose_from_transform(t1, t2):
     return np.concatenate((trans_result, euler_result), 0)
 
 
-def eval_global_error(accu_global_pose, gt_global_pose):
+def eval_global_error(accu_global_pose, gt_global_pose, test_gt_global_pose):
     """
     input: (list -> batch)
     -> accu_global_pose: list of sp.Se3 Object
@@ -608,18 +619,21 @@ def eval_global_error(accu_global_pose, gt_global_pose):
     -> v2: from ||t-t'||, ||r-r'|| (disabled)
     """
     assert len(accu_global_pose) == len(gt_global_pose)
-    clip_size = accu_global_pose.shape[0]
 
     eval_global = dict()
     gt_global = dict()
     err_global = dict()
+    test_global = dict()
+
     for _metric in ['x', 'y', 'theta']:
         eval_global[_metric] = []
         gt_global[_metric] = []
         err_global[_metric] = []
+        test_global[_metric] = []
 
-    pred = accu_global_pose[-1].squeeze(0).squeeze(0).cpu().numpy()
-    gt = gt_global_pose[-1].squeeze(0).squeeze(0).cpu().numpy()
+    pred = accu_global_pose
+    gt = gt_global_pose
+    gt_test = test_gt_global_pose
     dt = get_relative_pose_from_transform(gt, pred)
 
     eval_global['x'].append(pred[0])
@@ -634,8 +648,12 @@ def eval_global_error(accu_global_pose, gt_global_pose):
     err_global['y'].append(dt[1])
     err_global['theta'].append(dt[5])
 
+    test_global['x'].append(gt_test[0])
+    test_global['y'].append(gt_test[1])
+    test_global['theta'].append(gt_test[5])
+
     # each value in eval_global: a list with length eval_batch_size
-    return eval_global, gt_global, err_global
+    return eval_global, gt_global, err_global, test_global
 
 
 def get_lr(optimizer):

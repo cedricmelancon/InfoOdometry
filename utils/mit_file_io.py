@@ -13,6 +13,7 @@ import PIL
 from PIL import Image
 import torch
 
+
 def generate_continuous_theta(dataframe):
     for i in range(1, len(dataframe)):
         diff = dataframe['theta'].iloc[i] - dataframe['theta'].iloc[i-1]
@@ -25,6 +26,7 @@ def generate_continuous_theta(dataframe):
             dataframe.loc[i:, 'theta'] += 2 * np.pi
             generate_continuous_theta(dataframe)
     return dataframe
+
 
 def read_mit_pose(base_dir, sequence_gt):
     """
