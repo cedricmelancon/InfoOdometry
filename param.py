@@ -5,6 +5,7 @@ import shutil
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import numpy as np
 
 
 class Param:
@@ -39,8 +40,8 @@ class Param:
                                  help='kl weight for posterior and prior states in the world model')
         self.parser.add_argument('--global_kl_beta', type=float, default=0, help='global kl weight (0 to disable)')
         self.parser.add_argument('--eval_ckp', type=str, default='best', help='best, last')
-        self.parser.add_argument('--translation_weight', type=float, default=10000, help='weight for translation_loss')
-        self.parser.add_argument('--rotation_weight', type=float, default=1000, help='weight for rotation_loss')
+        self.parser.add_argument('--translation_weight', type=float, default=1000, help='weight for translation_loss')
+        self.parser.add_argument('--rotation_weight', type=float, default=100 * 180/np.pi, help='weight for rotation_loss')
 
         # for soft / hard deepvio baselines
         self.parser.add_argument('--soft', action='store_const', default=False, const=True)
@@ -58,7 +59,7 @@ class Param:
 
         # args for training information models
         self.parser.add_argument('--seed', type=int, default=666, help='random seed')
-        self.parser.add_argument('--activation_function', type=str, default='relu', choices=dir(F),
+        self.parser.add_argument('--activation_function', type=str, default='tanh', choices=dir(F),
                                  help='model activation function')
         self.parser.add_argument('--embedding_size', type=int, default=1024, help='observation embedding size')
         self.parser.add_argument('--hidden_size', type=int, default=512, help='hidden size')
@@ -78,7 +79,7 @@ class Param:
                                  help='observation imu loss weight; 0 to disable')
         self.parser.add_argument('--bit_depth', type=int, default=5, help='image bit depth (quantisation)')
         self.parser.add_argument('--adam_epsilon', type=float, default=1e-4, help='adam optimizer epsilon value')
-        self.parser.add_argument('--grad_clip_norm', type=float, default=1000, help='gradient clipping norm')
+        self.parser.add_argument('--grad_clip_norm', type=float, default=500, help='gradient clipping norm')
         self.parser.add_argument('--rec_loss', type=str, default='mean', choices=["sum", "mean"],
                                  help='observation reconstruction loss type: sum or mean')
         self.parser.add_argument('--load_model', type=str, default='none',
@@ -102,7 +103,7 @@ class Param:
         self.parser.add_argument('--gpu', type=str, default='0',
                                  help='specify the list of gpus separated by , : e.g. 0,1,2,3')
         self.parser.add_argument('--epoch', type=int, default=300)
-        self.parser.add_argument('--lr', type=float, default=5e-4)
+        self.parser.add_argument('--lr', type=float, default=1e-4)
         self.parser.add_argument('--lr_warmup', action='store_const', default=False, const=True)
         self.parser.add_argument('--n_warmup_steps', type=int, default=12800)
         self.parser.add_argument('--lr_schedule', type=str, default='50,85,115,150',

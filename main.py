@@ -43,7 +43,8 @@ def save_data(writer, loss, labels_global, labels_delta, pred_abs, pred_rel, epo
                           labels_global.cpu().detach().numpy()[-1, :],
                           labels_delta.cpu().detach().numpy()[-1, :],
                           pred_rel.cpu().detach().numpy()[-1, :],
-                          pred_abs), axis=None)
+                          np.array(pred_abs)[-1,:]), axis=None)
+
     writer.writerow(row)
 
 
@@ -392,11 +393,11 @@ def train(args):
             
             pred_rel_poses = bottle(pose_model, (posterior_states, ))
             #pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, :2] * 1000, y_rel_poses[:, :, :2] * 1000, reduction='none').sum(dim=2).mean(dim=(0, 1))
-            pose_trans_loss_x = 5 * args.translation_weight * F.mse_loss(pred_rel_poses[:, :, :1], y_rel_poses[:,:,:1], reduction='none').sum(dim=2).mean(dim=(0,1))
-            pose_trans_loss_y = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, 1:2], y_rel_poses[:, :, 1:2], reduction='none').sum(dim=2).mean(dim=(0, 1))
+            pose_trans_loss_x = F.mse_loss(pred_rel_poses[:, :, :1] * args.translation_weight, y_rel_poses[:,:,:1] * args.translation_weight, reduction='none').sum(dim=2).mean(dim=(0,1))
+            pose_trans_loss_y = F.mse_loss(pred_rel_poses[:, :, 1:2] * args.translation_weight, y_rel_poses[:, :, 1:2] * args.translation_weight, reduction='none').sum(dim=2).mean(dim=(0, 1))
             #pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3], y_rel_poses[:, :, :3],
             #                                                       reduction='none').sum(dim=2).mean(dim=(0, 1))
-            pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,-1:], y_rel_poses[:,:,-1:], reduction='none').sum(dim=2).mean(dim=(0,1))
+            pose_rot_loss = F.mse_loss(pred_rel_poses[:,:,-1:] * args.rotation_weight, y_rel_poses[:,:,-1:] * args.rotation_weight, reduction='none').sum(dim=2).mean(dim=(0,1))
             #pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
             #                                                  reduction='none').sum(dim=2).mean(dim=(0, 1))
 
@@ -408,7 +409,7 @@ def train(args):
             
             optimizer.zero_grad()
             total_loss.backward()
-            #nn.utils.clip_grad_norm(param_list, args.grad_clip_norm, norm_type=2)
+            nn.utils.clip_grad_norm(param_list, args.grad_clip_norm, norm_type=2)
             optimizer.step() # if using ScheduledOptim -> will also update learning rate
 
             writer.add_scalar('train/total_loss', total_loss.item(), curr_iter)
@@ -554,13 +555,13 @@ def train(args):
                                 # kl_loss += args.global_kl_beta * kl_divergence(Normal(posterior_means, posterior_std_devs), tmp_global_prior).sum(dim=2).mean(dim=(0,1))
                                 kl_loss += kl_divergence(Normal(posterior_means, posterior_std_devs), tmp_global_prior).sum(dim=2).mean(dim=(0,1))
 
-                    pose_trans_loss_x = 5 * args.translation_weight * F.mse_loss(pred_rel_poses[:, :, :1], y_rel_poses[:, :, :1], reduction='none').sum(dim=2).mean(dim=(0, 1))
-                    pose_trans_loss_y = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, 1:2], y_rel_poses[:, :, 1:2], reduction='none').sum(dim=2).mean(dim=(0, 1))
+                    pose_trans_loss_x = F.mse_loss(pred_rel_poses[:, :, :1] * args.translation_weight, y_rel_poses[:, :, :1] * args.translation_weight, reduction='none').sum(dim=2).mean(dim=(0, 1))
+                    pose_trans_loss_y = F.mse_loss(pred_rel_poses[:, :, 1:2] * args.translation_weight, y_rel_poses[:, :, 1:2] * args.translation_weight, reduction='none').sum(dim=2).mean(dim=(0, 1))
                     #pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:2]*1000., y_rel_poses[:,:,:2]*1000, reduction='none').sum(dim=2).mean(dim=(0,1))
                     #pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3],
                     #                                                       y_rel_poses[:, :, :3], reduction='none').sum(
                     #    dim=2).mean(dim=(0, 1))
-                    pose_rot_loss = args.rotation_weight * F.mse_loss(pred_rel_poses[:,:,-1:], y_rel_poses[:,:,-1:], reduction='none').sum(dim=2).mean(dim=(0,1))
+                    pose_rot_loss = F.mse_loss(pred_rel_poses[:,:,-1:] * args.rotation_weight, y_rel_poses[:,:,-1:] * args.rotation_weight, reduction='none').sum(dim=2).mean(dim=(0,1))
                     #pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
                     #                                                  reduction='none').sum(dim=2).mean(dim=(0, 1))
 
