@@ -1186,11 +1186,10 @@ class PoseModel(nn.Module):
         self.act_fn = getattr(F, activation_function)
         self.dropout = getattr(F, 'dropout')
         self.fc1 = nn.Linear(state_size, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc2_1 = nn.Linear(hidden_size, hidden_size)
-        self.fc2_2 = nn.Linear(hidden_size, hidden_size)
-        self.fc2_3 = nn.Linear(hidden_size, hidden_size)
-        self.fc3_trans_x = nn.Linear(hidden_size, 1)
+        self.fc2_lin = nn.Linear(hidden_size, hidden_size)
+        self.fc2_ang = nn.Linear(hidden_size, hidden_size)
+        self.fc3_lin = nn.Linear(hidden_size, 256)
+        self.fc4_trans_x = nn.Linear(256, 1)
         self.fc3_trans_y = nn.Linear(hidden_size, 1)
         self.fc3_rot = nn.Linear(hidden_size, 1)
 
@@ -1198,11 +1197,12 @@ class PoseModel(nn.Module):
     # def forward(self, state, state_std):
     def forward(self, state):
         hidden = self.act_fn(self.dropout(self.fc1(state), 0.5))
-        hidden = self.act_fn(self.dropout(self.fc2(hidden), 0.5))
-        trans_x = self.fc3_trans_x(self.act_fn(self.dropout(self.fc2_1(hidden), 0.5)))
-        trans_y = self.fc3_trans_y(self.act_fn(self.dropout(self.fc2_2(hidden), 0.5)))
+        hidden_lin = F.relu(self.dropout(self.fc2_lin(hidden), 0.5))
+        hidden_ang = self.act_fn(self.dropout(self.fc2_ang(hidden), 0.5))
+        trans_x = self.fc3_lin(hidden_lin)
+        trans_y = self.fc3_trans_y(hidden_ang)
         zero_trans = torch.zeros([trans_x.shape[0], 1]).to('cuda:1')
-        rot = self.fc3_rot(self.act_fn(self.dropout(self.fc2_3(hidden), 0.5)))
+        rot = self.fc3_rot(hidden_ang)
         zero_rot = torch.zeros([rot.shape[0], 2]).to('cuda:1')
         return torch.cat([trans_x, trans_y, zero_trans, zero_rot, rot], dim=1)
 
