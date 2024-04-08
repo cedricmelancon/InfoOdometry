@@ -130,7 +130,7 @@ class SeqVINet(nn.Module):
                 hidden = hidden.unsqueeze(1)
                 fusion_feature_rnn, fusion_lstm_hiddens[t + 1] = self.rnn_fusion(hidden, fusion_lstm_hiddens[t])
                 fusion_features[t + 1] = fusion_feature_rnn.squeeze(1)
-            hidden = self.act_fn(self.dropout(self.fc_embed_fusion(fusion_features[t + 1]), 0.5))
+            hidden = self.act_fn(self.dropout(self.fc_embed_fusion(fusion_features[t + 1]), 0.6))
             out_features[t_ + 1] = self.fc_out_fusion(hidden)
             if use_pose_model:
                 with torch.no_grad():

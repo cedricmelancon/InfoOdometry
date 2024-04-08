@@ -19,7 +19,7 @@ class Param:
         self.parser.add_argument('--img_prefeat', type=str, default='none',
                                  help='none, flownet or resnet (not implemented yet)')
         self.parser.add_argument('--failure_type', type=str, default='noise', help='noise, missing, mixed or none')
-        self.parser.add_argument('--sample_size_ratio', type=float, default=1.0,
+        self.parser.add_argument('--sample_size_ratio', type=float, default=0.5,
                                  help='the ratio of total non-overlapped clips (1) only take effect in (0,1) (2) only used in training')
         self.parser.add_argument('--imu_only', action='store_const', default=False, const=True,
                                  help='need to be used with --transition_model double')
@@ -31,7 +31,7 @@ class Param:
         self.parser.add_argument('--transition_model', type=str, default='single',
                                  help='single, double, single-vinet, multi-vinet, deepvo, deepvio')
         self.parser.add_argument('--rec_type', type=str, default='posterior', help='posterior or prior')
-        self.parser.add_argument('--imu_rnn', type=str, default='gru', help='gru or lstm')
+        self.parser.add_argument('--imu_rnn', type=str, default='lstm', help='gru or lstm')
         self.parser.add_argument('--eval_uncertainty', action='store_const', default=False, const=True)
         self.parser.add_argument('--uncertainty_groups', type=int, default=1, help='1, 2')
         self.parser.add_argument('--kl_free_nats', type=str, default='max', help='none, min, max')
@@ -41,7 +41,7 @@ class Param:
         self.parser.add_argument('--global_kl_beta', type=float, default=0, help='global kl weight (0 to disable)')
         self.parser.add_argument('--eval_ckp', type=str, default='best', help='best, last')
         self.parser.add_argument('--translation_weight', type=float, default=1000, help='weight for translation_loss')
-        self.parser.add_argument('--rotation_weight', type=float, default=100 * 180/np.pi, help='weight for rotation_loss')
+        self.parser.add_argument('--rotation_weight', type=float, default=10 * 180/np.pi, help='weight for rotation_loss')
 
         # for soft / hard deepvio baselines
         self.parser.add_argument('--soft', action='store_const', default=False, const=True)
@@ -63,8 +63,8 @@ class Param:
                                  help='model activation function')
         self.parser.add_argument('--embedding_size', type=int, default=1024, help='observation embedding size')
         self.parser.add_argument('--hidden_size', type=int, default=512, help='hidden size')
-        self.parser.add_argument('--belief_size', type=int, default=512, help='belief/hidden size')
-        self.parser.add_argument('--belief_rnn', type=str, default='gru', help='lstm or gru')
+        self.parser.add_argument('--belief_size', type=int, default=256, help='belief/hidden size')
+        self.parser.add_argument('--belief_rnn', type=str, default='lstm', help='lstm or gru')
         self.parser.add_argument('--state_size', type=int, default=256, help='state/latent size')
         self.parser.add_argument('--batch_size', type=int, default=16, help='batch size')
         self.parser.add_argument('--overshooting_distance', type=int, default=10,
@@ -79,7 +79,7 @@ class Param:
                                  help='observation imu loss weight; 0 to disable')
         self.parser.add_argument('--bit_depth', type=int, default=5, help='image bit depth (quantisation)')
         self.parser.add_argument('--adam_epsilon', type=float, default=1e-4, help='adam optimizer epsilon value')
-        self.parser.add_argument('--grad_clip_norm', type=float, default=500, help='gradient clipping norm')
+        self.parser.add_argument('--grad_clip_norm', type=float, default=1000, help='gradient clipping norm')
         self.parser.add_argument('--rec_loss', type=str, default='mean', choices=["sum", "mean"],
                                  help='observation reconstruction loss type: sum or mean')
         self.parser.add_argument('--load_model', type=str, default='none',
@@ -103,7 +103,7 @@ class Param:
         self.parser.add_argument('--gpu', type=str, default='0',
                                  help='specify the list of gpus separated by , : e.g. 0,1,2,3')
         self.parser.add_argument('--epoch', type=int, default=300)
-        self.parser.add_argument('--lr', type=float, default=1e-4)
+        self.parser.add_argument('--lr', type=float, default=1e-5)
         self.parser.add_argument('--lr_warmup', action='store_const', default=False, const=True)
         self.parser.add_argument('--n_warmup_steps', type=int, default=12800)
         self.parser.add_argument('--lr_schedule', type=str, default='50,85,115,150',
@@ -132,15 +132,15 @@ class Param:
                                  help='euroc, kitti (determine base_dir, train/eval_sequences')
         self.parser.add_argument('--base_dir', type=str, default='/data', help='should not be specified')
         self.parser.add_argument('--train_sequences', type=str,
-                                 default='2012-01-25-12-14-25,2012-04-03-07-56-24,2012-05-02-06-23-02,2012-01-28-12-38-24,2012-01-28-12-38-24,2012-01-27-07-37-01,2012-01-27-07-37-01,2012-02-02-10-44-08',
+                                 default='2012-01-25-12-14-25,2012-04-03-07-56-24,2012-04-03-07-56-24,2012-05-02-06-23-02,2012-01-28-12-38-24,2012-01-28-12-38-24,2012-01-27-07-37-01,2012-01-27-07-37-01,2012-02-02-10-44-08',
                                  #default='2012-04-03-07-56-24',
                                  help='separated by , ')
         self.parser.add_argument('--train_sequences_gt', type=str,
-                                 default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part1_floor2,2012-05-02-06-23-02_part2_floor2,2012-01-28-12-38-24_part1_floor2,2012-01-28-12-38-24_part4_floor2,2012-01-27-07-37-01_part1_floor2,2012-01-27-07-37-01_part3_floor2,2012-02-02-10-44-08_part1_floor2',
+                                 default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part4_floor2,2012-04-03-07-56-24_part1_floor2,2012-05-02-06-23-02_part2_floor2,2012-01-28-12-38-24_part1_floor2,2012-01-28-12-38-24_part4_floor2,2012-01-27-07-37-01_part1_floor2,2012-01-27-07-37-01_part3_floor2,2012-02-02-10-44-08_part1_floor2',
                                  #default='2012-04-03-07-56-24_part1_floor2',
                                  help='separated by , ')
         self.parser.add_argument('--eval_sequences', type=str, default='2012-04-03-07-56-24', help='separated by , ')
-        self.parser.add_argument('--eval_sequences_gt', type=str, default='2012-04-03-07-56-24_part4_floor2', help='separated by , ')
+        self.parser.add_argument('--eval_sequences_gt', type=str, default='2012-04-03-07-56-24_part1_floor2', help='separated by , ')
         self.parser.add_argument('--clip_length', type=int, default=5)
         self.parser.add_argument('--clip_overlap', action='store_const', default=False, const=True)
         self.parser.add_argument('--euroc_ds_train', type=str, default="both",
