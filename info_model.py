@@ -1201,9 +1201,9 @@ class PoseModel(nn.Module):
         hidden = self.act_fn(self.dropout(self.fc2(hidden), 0.5))
         trans_x = self.fc3_trans_x(self.act_fn(self.dropout(self.fc2_1(hidden), 0.5)))
         trans_y = self.fc3_trans_y(self.act_fn(self.dropout(self.fc2_2(hidden), 0.5)))
-        zero_trans = torch.zeros([trans_x.shape[0], 1]).to('cuda:1')
+        zero_trans = torch.zeros([trans_x.shape[0], 1]).to('cuda:0')
         rot = self.fc3_rot(self.act_fn(self.dropout(self.fc2_3(hidden), 0.5)))
-        zero_rot = torch.zeros([rot.shape[0], 2]).to('cuda:1')
+        zero_rot = torch.zeros([rot.shape[0], 2]).to('cuda:0')
         return torch.cat([trans_x, trans_y, zero_trans, zero_rot, rot], dim=1)
 
 

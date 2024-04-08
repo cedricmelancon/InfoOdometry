@@ -4,8 +4,8 @@ PYTHONPATH="$PYTHONPATH:/IdeaProjects/InfoOdometry/flownet/channelnorm_package"
 PYTHONPATH="$PYTHONPATH:/IdeaProjects/InfoOdometry/flownet/correlation_package"
 PYTHONPATH="$PYTHONPATH:/IdeaProjects/InfoOdometry/flownet/resample2d_package"
 
-CUDA_HOME="/usr/local/cuda-11.5"
-LD_LIBRARY_PATH=/usr/local/cuda-11.5/lib64:/opt/conda/lib/python3.8/site-packages/torch/lib/lib
+CUDA_HOME="/usr/local/cuda-12.1"
+LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64
 
 cd ./flownet/correlation_package
 rm -rf *_cuda.egg-info build dist __pycache__

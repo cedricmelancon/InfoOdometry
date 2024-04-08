@@ -20,10 +20,9 @@ from info_model import DoubleStochasticVITransitionModel
 from info_model import ObservationModel
 from info_model import PoseModel
 from info_model import Encoder
-from flownet_model import FlowNet2
-from flownet_model import FlowNet2C
+#from flownet_model import FlowNet2
+#from flownet_model import FlowNet2C
 from flownet_model import FlowNet2S
-from pytorch3d.transforms import euler_angles_to_matrix, matrix_to_euler_angles, quaternion_to_matrix
 from scipy.spatial.transform import Rotation as R
 
 
@@ -356,12 +355,12 @@ def construct_models(args):
     if args.flownet_model != 'none' and args.img_prefeat == 'none':
         if args.train_img_from_scratch:
             raise ValueError('if --flownet_model -> --train_img_from_scratch should not be used')
-        if args.flownet_model == 'FlowNet2':
-            flownet_model = FlowNet2(args).to(device=args.device)
-        elif args.flownet_model == 'FlowNet2S':
+        #if args.flownet_model == 'FlowNet2':
+        #    flownet_model = FlowNet2(args).to(device=args.device)
+        if args.flownet_model == 'FlowNet2S':
             flownet_model = FlowNet2S(args).to(device=args.device)
-        elif args.flownet_model == 'FlowNet2C':
-            flownet_model = FlowNet2C(args).to(device=args.device)
+        #elif args.flownet_model == 'FlowNet2C':
+        #    flownet_model = FlowNet2C(args).to(device=args.device)
         else:
             raise ValueError('--flownet_model: {} is not supported'.format(args.flownet_model))
         resume_ckp = '/data/results/ckp/pretrained_flownet/{}_checkpoint.pth.tar'.format(
