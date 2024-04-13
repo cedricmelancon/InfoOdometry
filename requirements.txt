@@ -1,5 +1,4 @@
 pytz
-#torch==2.2.0
 tensorboard
 tensorboardX
 sympy
@@ -18,7 +17,5 @@ pillow
 pyquaternion
 quaternion
 transforms3d
-#torchvision
 pandas
 matplotlib
-#pytorch3d
