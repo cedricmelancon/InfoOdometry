@@ -41,7 +41,7 @@ class Param:
         self.parser.add_argument('--global_kl_beta', type=float, default=0, help='global kl weight (0 to disable)')
         self.parser.add_argument('--eval_ckp', type=str, default='best', help='best, last')
         self.parser.add_argument('--translation_weight', type=float, default=1000, help='weight for translation_loss')
-        self.parser.add_argument('--rotation_weight', type=float, default=10 * 180/np.pi, help='weight for rotation_loss')
+        self.parser.add_argument('--rotation_weight', type=float, default=30 * 180/np.pi, help='weight for rotation_loss')
 
         # for soft / hard deepvio baselines
         self.parser.add_argument('--soft', action='store_const', default=False, const=True)
@@ -103,7 +103,7 @@ class Param:
         self.parser.add_argument('--gpu', type=str, default='0',
                                  help='specify the list of gpus separated by , : e.g. 0,1,2,3')
         self.parser.add_argument('--epoch', type=int, default=300)
-        self.parser.add_argument('--lr', type=float, default=1e-5)
+        self.parser.add_argument('--lr', type=float, default=2e-5)
         self.parser.add_argument('--lr_warmup', action='store_const', default=False, const=True)
         self.parser.add_argument('--n_warmup_steps', type=int, default=12800)
         self.parser.add_argument('--lr_schedule', type=str, default='50,85,115,150',

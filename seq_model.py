@@ -55,6 +55,56 @@ class SeqVINet(nn.Module):
                 self.onehot_hard = False
             self.eps = 1e-10
 
+        self.init_weights()
+
+    def init_weights(self):
+        """
+        follow a deepvo pytorch implementation gitub repo
+        """
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                if m.bias is not None:
+                    m.bias.data.zero_()
+                nn.init.xavier_normal_(m.weight.data)
+
+            elif isinstance(m, nn.Conv2d):
+                # n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                # m.weight.data.normal_(0, math.sqrt(2. / n))
+                # if m.bias is not None:
+                #     m.bias.data.zero_()
+                if m.bias is not None:
+                    nn.init.uniform_(m.bias)
+                nn.init.xavier_uniform_(m.weight)
+
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+            elif isinstance(m, nn.LSTMCell):
+                for name, param in m.named_parameters():
+                    if 'weight' in name:
+                        # nn.init.orthogonal(param)
+                        nn.init.xavier_normal_(param)
+                    elif 'bias' in name:
+                        # Forget gate bias trick: Initially during training, it is often helpful
+                        # to initialize the forget gate bias to a large value, to help information
+                        # flow over longer time steps.
+                        # In a PyTorch LSTM, the biases are stored in the following order:
+                        # [ b_ig | b_fg | b_gg | b_og ]
+                        # where, b_ig is the bias for the input gate,
+                        # b_fg is the bias for the forget gate,
+                        # b_gg (see LSTM docs, Variables section),
+                        # b_og is the bias for the output gate.
+                        # So, we compute the location of the forget gate bias terms as the
+                        # middle one-fourth of the bias vector, and initialize them.
+
+                        # First initialize all biases to zero
+                        # nn.init.uniform_(param)
+                        nn.init.constant_(param, 0.)
+                        bias = getattr(m, name)
+                        n = bias.size(0)
+                        start, end = n // 4, n // 2
+                        bias.data[start:end].fill_(10.)
     # Operates over (previous) state, (previous) poses, (previous) belief, (previous) nonterminals (mask), and (current) observations
     # Diagram of expected inputs and outputs for T = 5 (-x- signifying beginning of output belief/state that gets sliced off):
     # t :  0  1  2  3  4  5
