@@ -391,14 +391,10 @@ def train(args):
             
             
             pred_rel_poses = bottle(pose_model, (posterior_states, ))
-            #pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:, :, :2] * 1000, y_rel_poses[:, :, :2] * 1000, reduction='none').sum(dim=2).mean(dim=(0, 1))
-            pose_trans_loss_x = F.mse_loss(pred_rel_poses[:, :, :1] * args.translation_weight, y_rel_poses[:, :, :1] * args.translation_weight, reduction='none').sum(dim=2).mean(dim=(0,1))
-            pose_trans_loss_y = F.mse_loss(pred_rel_poses[:, :, 1:2] * args.translation_weight, y_rel_poses[:, :, 1:2] * args.translation_weight, reduction='none').sum(dim=2).mean(dim=(0, 1))
-            #pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3], y_rel_poses[:, :, :3],
-            #                                                       reduction='none').sum(dim=2).mean(dim=(0, 1))
-            pose_rot_loss = F.mse_loss(pred_rel_poses[:, :, -1:] * args.rotation_weight, y_rel_poses[:, :, -1:] * args.rotation_weight, reduction='none').sum(dim=2).mean(dim=(0,1))
-            #pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
-            #                                                  reduction='none').sum(dim=2).mean(dim=(0, 1))
+
+            pose_trans_loss_x = F.huber_loss(pred_rel_poses[:, :, :1] * args.translation_weight, y_rel_poses[:, :, :1] * args.translation_weight, reduction='none').sum(dim=2).mean(dim=(0,1))
+            pose_trans_loss_y = F.huber_loss(pred_rel_poses[:, :, 1:2] * args.translation_weight, y_rel_poses[:, :, 1:2] * args.translation_weight, reduction='none').sum(dim=2).mean(dim=(0, 1))
+            pose_rot_loss = F.huber_loss(pred_rel_poses[:, :, -1:] * args.rotation_weight, y_rel_poses[:, :, -1:] * args.rotation_weight, reduction='none').sum(dim=2).mean(dim=(0,1))
 
             total_loss = pose_trans_loss_x + pose_trans_loss_y + pose_rot_loss
             if use_info:
@@ -554,15 +550,9 @@ def train(args):
                                 # kl_loss += args.global_kl_beta * kl_divergence(Normal(posterior_means, posterior_std_devs), tmp_global_prior).sum(dim=2).mean(dim=(0,1))
                                 kl_loss += kl_divergence(Normal(posterior_means, posterior_std_devs), tmp_global_prior).sum(dim=2).mean(dim=(0,1))
 
-                    pose_trans_loss_x = F.mse_loss(pred_rel_poses[:, :, :1] * args.translation_weight, y_rel_poses[:, :, :1] * args.translation_weight, reduction='none').sum(dim=2).mean(dim=(0, 1))
-                    pose_trans_loss_y = F.mse_loss(pred_rel_poses[:, :, 1:2] * args.translation_weight, y_rel_poses[:, :, 1:2] * args.translation_weight, reduction='none').sum(dim=2).mean(dim=(0, 1))
-                    #pose_trans_loss = args.translation_weight * F.mse_loss(pred_rel_poses[:,:,:2]*1000., y_rel_poses[:,:,:2]*1000, reduction='none').sum(dim=2).mean(dim=(0,1))
-                    #pose_trans_loss = args.translation_weight * F.l1_loss(pred_rel_poses[:, :, :3],
-                    #                                                       y_rel_poses[:, :, :3], reduction='none').sum(
-                    #    dim=2).mean(dim=(0, 1))
-                    pose_rot_loss = F.mse_loss(pred_rel_poses[:, :, -1:] * args.rotation_weight, y_rel_poses[:,:,-1:] * args.rotation_weight, reduction='none').sum(dim=2).mean(dim=(0,1))
-                    #pose_rot_loss = args.rotation_weight * F.l1_loss(pred_rel_poses[:, :, -3:], y_rel_poses[:, :, -3:],
-                    #                                                  reduction='none').sum(dim=2).mean(dim=(0, 1))
+                    pose_trans_loss_x = F.huber_loss(pred_rel_poses[:, :, :1] * args.translation_weight, y_rel_poses[:, :, :1] * args.translation_weight, reduction='none').sum(dim=2).mean(dim=(0, 1))
+                    pose_trans_loss_y = F.huber_loss(pred_rel_poses[:, :, 1:2] * args.translation_weight, y_rel_poses[:, :, 1:2] * args.translation_weight, reduction='none').sum(dim=2).mean(dim=(0, 1))
+                    pose_rot_loss = F.huber_loss(pred_rel_poses[:, :, -1:] * args.rotation_weight, y_rel_poses[:,:,-1:] * args.rotation_weight, reduction='none').sum(dim=2).mean(dim=(0,1))
 
                     total_loss = pose_trans_loss_x + pose_trans_loss_y + pose_rot_loss
                     if use_info:
