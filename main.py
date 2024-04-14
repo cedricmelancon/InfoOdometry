@@ -208,8 +208,8 @@ def train(args):
         raise NotImplementedError()
 
     best_epoch = {'sqrt_then_avg': 0} # 'avg_then_sqrt': 0
-    best_rpe_all = {'sqrt_then_avg': 1.0} # 'avg_then_sqrt': 1.0
-    best_metrics = {'sqrt_then_avg': None} # 'avg_then_sqrt': None
+    best_eval = {'total_loss': 100000.0} # 'avg_then_sqrt': 1.0
+    best_metrics = {'total_loss': None} # 'avg_then_sqrt': None
     eval_msgs = []
     
     # gumbel temperature for hard deepvio
@@ -223,7 +223,7 @@ def train(args):
     # starting training (the same epochs for each sequence)
     curr_iter = 0
     curr_eval_iter = 0
-    for epoch_idx in range(epoch):    
+    for epoch_idx in range(epoch):
         print('-----------------------------------------')
         print('starting epoch {}...'.format(epoch_idx))
         print('learning rate: {:.6f}'.format(get_lr(optimizer)))
@@ -248,7 +248,7 @@ def train(args):
         
         batch_timer = SequenceTimer()
         last_batch_index = len(train_clips) - 1
-        for batch_idx, batch_data in enumerate(train_clips):
+        for batch_idx, batch_data in tqdm(enumerate(train_clips)):
             if args.debug and batch_idx >= 10: break
 
             # x_img_list:                length-5 list with component [batch, 3, 2, H, W]
@@ -412,10 +412,10 @@ def train(args):
             optimizer.step() # if using ScheduledOptim -> will also update learning rate
 
             writer.add_scalar('train/total_loss', total_loss.item(), curr_iter)
-            if use_info:
-                if args.observation_beta != 0: writer.add_scalar('train/observation_visual_loss', observation_loss.item(), curr_iter)
-                if use_imu and args.observation_imu_beta != 0: writer.add_scalar('train/observation_imu_loss', observation_imu_loss.item(), curr_iter)
-                writer.add_scalar('train/kl_loss', kl_loss.item(), curr_iter)
+            #if use_info:
+            #    if args.observation_beta != 0: writer.add_scalar('train/observation_visual_loss', observation_loss.item(), curr_iter)
+            #    if use_imu and args.observation_imu_beta != 0: writer.add_scalar('train/observation_imu_loss', observation_imu_loss.item(), curr_iter)
+            #    writer.add_scalar('train/kl_loss', kl_loss.item(), curr_iter)
             writer.add_scalar('train/pose_trans_loss_x', pose_trans_loss_x.item(), curr_iter)
             writer.add_scalar('train/pose_trans_loss_y', pose_trans_loss_y.item(), curr_iter)
             writer.add_scalar('train/pose_rot_loss', pose_rot_loss.item(), curr_iter)
@@ -426,12 +426,12 @@ def train(args):
             remain_time = batch_timer.get_remaining_time(batch_idx, last_batch_index)
             remain_time = '{:.0f}h:{:2.0f}m:{:2.0f}s'.format(remain_time//3600, (remain_time%3600)//60, (remain_time%60))
             
-            loss_str = '{:.5f}+{:.5f}'.format(pose_trans_loss_x.item() + pose_trans_loss_y.item(), pose_rot_loss.item())
-            if use_info:
-                loss_str = '{:.5f}+{}'.format(kl_loss.item(), loss_str)
-                if use_imu and args.observation_imu_beta != 0: loss_str = '{:.5f}+{}'.format(observation_imu_loss.item(), loss_str)
-                if args.observation_beta != 0: loss_str = '{:.5f}+{}'.format(observation_loss.item(), loss_str)
-            print('epoch: {:3d} | {:4d}/{} | loss: {:.5f} ({}) | time: {:.3f}s | remaining: {}'.format(epoch_idx, batch_idx, last_batch_index, total_loss.item(), loss_str, batch_timer.get_last_time_elapsed(), remain_time))
+            #loss_str = '{:.5f}+{:.5f}'.format(pose_trans_loss_x.item() + pose_trans_loss_y.item(), pose_rot_loss.item())
+            #if use_info:
+            #    loss_str = '{:.5f}+{}'.format(kl_loss.item(), loss_str)
+            #    if use_imu and args.observation_imu_beta != 0: loss_str = '{:.5f}+{}'.format(observation_imu_loss.item(), loss_str)
+            #    if args.observation_beta != 0: loss_str = '{:.5f}+{}'.format(observation_loss.item(), loss_str)
+            #print('epoch: {:3d} | {:4d}/{} | loss: {:.5f} ({}) | time: {:.3f}s | remaining: {}'.format(epoch_idx, batch_idx, last_batch_index, total_loss.item(), loss_str, batch_timer.get_last_time_elapsed(), remain_time))
 
         # evaluate the model after training each sequence
         # if gt_last_pose is False, then zero_first must be True
@@ -454,19 +454,19 @@ def train(args):
                 last_pose = None
                 last_gt_pose = None
 
-                if use_info:
-                    loss_list += ['kl_loss']
-                    if args.observation_beta != 0: loss_list += ['observation_visual_loss']
-                    if use_imu and args.observation_imu_beta != 0: loss_list += ['observation_imu_loss']
+                #if use_info:
+                #    loss_list += ['kl_loss']
+                #    if args.observation_beta != 0: loss_list += ['observation_visual_loss']
+                #    if use_imu and args.observation_imu_beta != 0: loss_list += ['observation_imu_loss']
                 for _met in loss_list:
                     loss_avg[_met] = RunningAverager()
-                list_eval = dict()
-                for _met in ['rpe', 'ate']:
-                    for _suf in ['_all', '_trans', '_rot_axis', '_rot_euler']:
-                        list_eval['{}{}'.format(_met, _suf)] = []
+                #list_eval = dict()
+                #for _met in ['rpe', 'ate']:
+                #    for _suf in ['_all', '_trans', '_rot_axis', '_rot_euler']:
+                #        list_eval['{}{}'.format(_met, _suf)] = []
 
                 beliefs = None
-                for batch_idx, batch_data in enumerate(eval_clips):
+                for batch_idx, batch_data in tqdm(enumerate(eval_clips)):
                     if args.debug and batch_idx >= 10:
                         break
 
@@ -582,8 +582,6 @@ def train(args):
                     for _fidx in range(args.clip_length):
                         # (1) evaluate relative pose error (2) no discard_num is used
                         eval_rel, test_rel, gt_rel, err_rel = eval_rel_error(pred_rel_poses[_fidx], y_rel_poses[_fidx], t_euler_loss=args.t_euler_loss)
-                        for _met in ['rpe_all', 'rpe_trans', 'rpe_rot_axis', 'rpe_rot_euler']:
-                            list_eval[_met].extend(eval_rel[_met])
 
                     new_pose = get_absolute_pose(pred_rel_poses, last_pose)
                     new_gt_pose = get_absolute_pose(y_rel_poses, last_gt_pose)
@@ -614,24 +612,19 @@ def train(args):
                     remain_time = batch_timer.get_remaining_time(batch_idx, last_batch_index)
                     remain_time = '{:.0f}h:{:2.0f}m:{:2.0f}s'.format(remain_time//3600, (remain_time%3600)//60, (remain_time%60))
 
-                    loss_str = '{:.5f}+{:.5f}'.format(pose_trans_loss_x.item() + pose_trans_loss_y.item(), pose_rot_loss.item())
-                    if use_info:
-                        loss_str = '{:.5f}+{}'.format( kl_loss.item(), loss_str)
-                        if use_imu and args.observation_imu_beta != 0: loss_str = '{:.5f}+{}'.format(observation_imu_loss.item(), loss_str)
-                        if args.observation_beta != 0: loss_str = '{:.5f}+{}'.format(observation_loss.item(), loss_str)
-                    print('eval: {:4d}/{} | loss: {:.5f} ({}) | time: {:.3f}s | remaining: {}'.format(batch_idx, last_batch_index, total_loss.item(), loss_str, batch_timer.get_last_time_elapsed(), remain_time))
+                    #loss_str = '{:.5f}+{:.5f}'.format(pose_trans_loss_x.item() + pose_trans_loss_y.item(), pose_rot_loss.item())
+                    #if use_info:
+                    #    loss_str = '{:.5f}+{}'.format( kl_loss.item(), loss_str)
+                    #    if use_imu and args.observation_imu_beta != 0: loss_str = '{:.5f}+{}'.format(observation_imu_loss.item(), loss_str)
+                    #    if args.observation_beta != 0: loss_str = '{:.5f}+{}'.format(observation_loss.item(), loss_str)
+                    #print('eval: {:4d}/{} | loss: {:.5f} ({}) | time: {:.3f}s | remaining: {}'.format(batch_idx, last_batch_index, total_loss.item(), loss_str, batch_timer.get_last_time_elapsed(), remain_time))
 
             out_eval = dict()
             for _loss in loss_list:
                 out_eval[_loss] = loss_avg[_loss].item()
                 writer.add_scalar('eval/{}_'.format(_loss), out_eval[_loss], epoch_idx)
-            out_eval['rpe_rot_axis'] = np.mean(np.array(list_eval['rpe_rot_axis']))
-            writer.add_scalar('eval_sqrt_then_avg/rpe_rot_axis', out_eval['rpe_rot_axis'], epoch_idx)
-            for _met in ['rpe_all', 'rpe_trans', 'rpe_rot_euler']:
-                out_eval[_met] = dict()
-                # out_eval[_met]['avg_then_sqrt'] = np.sqrt(np.mean(np.array(list_eval[_met])))
-                out_eval[_met]['sqrt_then_avg'] = np.mean(np.sqrt(np.array(list_eval[_met])))
-                writer.add_scalar('eval_sqrt_then_avg/{}'.format(_met), out_eval[_met]['sqrt_then_avg'], epoch_idx)
+            #out_eval['rpe_rot_axis'] = np.mean(np.array(list_eval['rpe_rot_axis']))
+            #writer.add_scalar('eval_sqrt_then_avg/rpe_rot_axis', out_eval['rpe_rot_axis'], epoch_idx)
 
             # update learning rate for next epoch
             if not args.lr_warmup:
@@ -653,34 +646,24 @@ def train(args):
                 check_str = '{}{}/ckp_epoch_{}.pt'.format(args.ckp_dir, args.exp_name, epoch_idx + 1)
                 save_model(path=check_str, **save_args)
 
-            if out_eval['rpe_all']['sqrt_then_avg'] < best_rpe_all['sqrt_then_avg'] or best_metrics['sqrt_then_avg'] is None:
-                best_rpe_all['sqrt_then_avg'] = out_eval['rpe_all']['sqrt_then_avg']
-                best_epoch['sqrt_then_avg'] = epoch_idx
-                best_metrics['sqrt_then_avg'] = out_eval
-                check_str = '{}{}/ckp_best-rpe-all_sqrt_then_avg.pt'.format(args.ckp_dir, args.exp_name)
+            if out_eval['total_loss'] < best_eval['total_loss'] or best_metrics['total_loss'] is None:
+                best_eval['total_loss'] = out_eval['total_loss']
+                best_epoch['total_loss'] = epoch_idx
+                best_metrics = out_eval
+                check_str = '{}{}/ckp_best-eval-loss.pt'.format(args.ckp_dir, args.exp_name)
                 save_model(path=check_str, **save_args)
             
             print('====================================')
             print('current epoch for sqrt_then_avg')
             print('====================================')
             loss_str = 'pose_trans_loss: {:.5f} | pose_rot_loss: {:.5f}'.format(out_eval['pose_trans_loss_x'] + out_eval['pose_trans_loss_y'], out_eval['pose_rot_loss'])
-            if use_info:
-                loss_str = 'kl_loss: {:.5f} \n{}'.format( out_eval['kl_loss'], loss_str)
-                if use_imu and args.observation_imu_beta != 0: loss_str = 'observation_imu_loss: {:.5f} | {}'.format(out_eval['observation_imu_loss'], loss_str)
-                if args.observation_beta != 0: loss_str = 'observation_visual_loss: {:.5f} | {}'.format(out_eval['observation_visual_loss'], loss_str)
             print('eval epoch: {} | total_loss: {:.5f} | {}'.format(epoch_idx, out_eval['total_loss'], loss_str))
-            print('rpe_all: {:.5f} | rpe_trans: {:.5f} | rpe_rot_axis: {:.5f} | rpe_rot_euler: {:.5f}'.format(out_eval['rpe_all']['sqrt_then_avg'], out_eval['rpe_trans']['sqrt_then_avg'], out_eval['rpe_rot_axis'], out_eval['rpe_rot_euler']['sqrt_then_avg']))
-            
+
             print('====================================')
             print('best epoch for sqrt_then_avg')
             print('====================================')
-            loss_str = 'pose_trans_loss: {:.5f} | pose_rot_loss: {:.5f}'.format(best_metrics['sqrt_then_avg']['pose_trans_loss_x'] + best_metrics['sqrt_then_avg']['pose_trans_loss_y'], best_metrics['sqrt_then_avg']['pose_rot_loss'])
-            if use_info:
-                loss_str = 'kl_loss: {:.5f} \n{}'.format(best_metrics['sqrt_then_avg']['kl_loss'], loss_str)
-                if use_imu and args.observation_imu_beta != 0: loss_str = 'observation_imu_loss: {:.5f} | {}'.format(best_metrics['sqrt_then_avg']['observation_imu_loss'], loss_str)
-                if args.observation_beta != 0: loss_str = 'observation_visual_loss: {:.5f} | {}'.format(best_metrics['sqrt_then_avg']['observation_visual_loss'], loss_str)
-            print('best epoch: {} | total_loss: {:.5f} | {}'.format(best_epoch['sqrt_then_avg'], best_metrics['sqrt_then_avg']['total_loss'], loss_str))
-            print('rpe_all: {:.5f} | rpe_trans: {:.5f} | rpe_rot_axis: {:.5f} | rpe_rot_euler: {:.5f}'.format(best_metrics['sqrt_then_avg']['rpe_all']['sqrt_then_avg'], best_metrics['sqrt_then_avg']['rpe_trans']['sqrt_then_avg'], best_metrics['sqrt_then_avg']['rpe_rot_axis'], best_metrics['sqrt_then_avg']['rpe_rot_euler']['sqrt_then_avg']))
+            loss_str = 'pose_trans_loss: {:.5f} | pose_rot_loss: {:.5f}'.format(best_metrics['pose_trans_loss_x'] + best_metrics['pose_trans_loss_y'], best_metrics['pose_rot_loss'])
+            print('best epoch: {} | total_loss: {:.5f} | {}'.format(best_epoch['total_loss'], best_metrics['total_loss'], loss_str))
 
     writer.export_scalars_to_json('{}{}/writer_scalars.json'.format(args.ckp_dir, args.exp_name))
     writer.close()

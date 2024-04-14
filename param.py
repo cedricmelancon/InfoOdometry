@@ -41,7 +41,7 @@ class Param:
         self.parser.add_argument('--global_kl_beta', type=float, default=0, help='global kl weight (0 to disable)')
         self.parser.add_argument('--eval_ckp', type=str, default='best', help='best, last')
         self.parser.add_argument('--translation_weight', type=float, default=1000, help='weight for translation_loss')
-        self.parser.add_argument('--rotation_weight', type=float, default=30 * 180/np.pi, help='weight for rotation_loss')
+        self.parser.add_argument('--rotation_weight', type=float, default=40 * 180/np.pi, help='weight for rotation_loss')
 
         # for soft / hard deepvio baselines
         self.parser.add_argument('--soft', action='store_const', default=False, const=True)
@@ -65,8 +65,8 @@ class Param:
         self.parser.add_argument('--hidden_size', type=int, default=1024, help='hidden size')
         self.parser.add_argument('--belief_size', type=int, default=512, help='belief/hidden size')
         self.parser.add_argument('--belief_rnn', type=str, default='lstm', help='lstm or gru')
-        self.parser.add_argument('--state_size', type=int, default=256, help='state/latent size')
-        self.parser.add_argument('--batch_size', type=int, default=16, help='batch size')
+        self.parser.add_argument('--state_size', type=int, default=512, help='state/latent size')
+        self.parser.add_argument('--batch_size', type=int, default=8, help='batch size')
         self.parser.add_argument('--overshooting_distance', type=int, default=10,
                                  help='latent overshooting distance/latent overshooting weight for t=1')
         self.parser.add_argument('--overshooting_kl_beta', type=float, default=0,
@@ -103,7 +103,7 @@ class Param:
         self.parser.add_argument('--gpu', type=str, default='0',
                                  help='specify the list of gpus separated by , : e.g. 0,1,2,3')
         self.parser.add_argument('--epoch', type=int, default=300)
-        self.parser.add_argument('--lr', type=float, default=2e-5)
+        self.parser.add_argument('--lr', type=float, default=4e-5)
         self.parser.add_argument('--lr_warmup', action='store_const', default=False, const=True)
         self.parser.add_argument('--n_warmup_steps', type=int, default=12800)
         self.parser.add_argument('--lr_schedule', type=str, default='50,85,115,150',
@@ -141,7 +141,7 @@ class Param:
                                  help='separated by , ')
         self.parser.add_argument('--eval_sequences', type=str, default='2012-04-03-07-56-24', help='separated by , ')
         self.parser.add_argument('--eval_sequences_gt', type=str, default='2012-04-03-07-56-24_part1_floor2', help='separated by , ')
-        self.parser.add_argument('--clip_length', type=int, default=5)
+        self.parser.add_argument('--clip_length', type=int, default=7)
         self.parser.add_argument('--clip_overlap', action='store_const', default=False, const=True)
         self.parser.add_argument('--euroc_ds_train', type=str, default="both",
                                  choices=["downsample", "raw_freq", "both"])
