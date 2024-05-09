@@ -19,7 +19,7 @@ class Param:
         self.parser.add_argument('--img_prefeat', type=str, default='none',
                                  help='none, flownet or resnet (not implemented yet)')
         self.parser.add_argument('--failure_type', type=str, default='noise', help='noise, missing, mixed or none')
-        self.parser.add_argument('--sample_size_ratio', type=float, default=0.5,
+        self.parser.add_argument('--sample_size_ratio', type=float, default=1.0,
                                  help='the ratio of total non-overlapped clips (1) only take effect in (0,1) (2) only used in training')
         self.parser.add_argument('--imu_only', action='store_const', default=False, const=True,
                                  help='need to be used with --transition_model double')
