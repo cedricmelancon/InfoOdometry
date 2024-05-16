@@ -1193,7 +1193,8 @@ class PoseModel(nn.Module):
         self.fc5_trans_x = nn.Linear(hidden_size, 1)
         self.fc3_trans_y = nn.Linear(2 * hidden_size, 1)
         self.fc3_rot = nn.Linear(2 * hidden_size, 2 * hidden_size)
-        self.fc4_rot = nn.Linear(2 * hidden_size, 1)
+        self.fc4_rot = nn.Linear(2 * hidden_size, hidden_size)
+        self.fc5_rot = nn.Linear(hidden_size, 1)
 
     # @jit.script_method
     # def forward(self, state, state_std):
@@ -1207,7 +1208,8 @@ class PoseModel(nn.Module):
         trans_y = self.fc3_trans_y(hidden_ang)
         zero_trans = torch.zeros([trans_x.shape[0], 1]).to('cuda:0')
         rot = self.act_fn(self.dropout(self.fc3_rot(hidden_ang), 0.5))
-        rot = self.fc4_rot(rot)
+        rot = self.act_fn(self.dropout(self.fc4_rot(rot), 0.5))
+        rot = self.fc5_rot(rot)
         zero_rot = torch.zeros([rot.shape[0], 2]).to('cuda:0')
         return torch.cat([trans_x, trans_y, zero_trans, zero_rot, rot], dim=1)
 

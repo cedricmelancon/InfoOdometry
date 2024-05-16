@@ -62,8 +62,8 @@ class Param:
         self.parser.add_argument('--activation_function', type=str, default='relu', choices=dir(F),
                                  help='model activation function')
         self.parser.add_argument('--embedding_size', type=int, default=1024, help='observation embedding size')
-        self.parser.add_argument('--hidden_size', type=int, default=1024, help='hidden size')
-        self.parser.add_argument('--belief_size', type=int, default=512, help='belief/hidden size')
+        self.parser.add_argument('--hidden_size', type=int, default=2048, help='hidden size')
+        self.parser.add_argument('--belief_size', type=int, default=1024, help='belief/hidden size')
         self.parser.add_argument('--belief_rnn', type=str, default='lstm', help='lstm or gru')
         self.parser.add_argument('--state_size', type=int, default=1024, help='state/latent size')
         self.parser.add_argument('--batch_size', type=int, default=8, help='batch size')
