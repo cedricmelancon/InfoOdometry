@@ -20,10 +20,7 @@ from info_model import DoubleStochasticVITransitionModel
 from info_model import ObservationModel
 from info_model import PoseModel
 from info_model import Encoder
-from flownet_model import FlowNet2
-from flownet_model import FlowNet2C
 from flownet_model import FlowNet2S
-from pytorch3d.transforms import euler_angles_to_matrix, matrix_to_euler_angles, quaternion_to_matrix
 from scipy.spatial.transform import Rotation as R
 
 
@@ -136,61 +133,6 @@ def get_relative_pose(t1, t2):
     return np.concatenate((trans_result, euler_result), 0)
 
 
-#def get_relative_pose(tq_R0, tq_R1, t_euler_loss=False):
-#    """
-#    input: T_R0, T_R1: (translation, quaternion): np.array with length 7
-#    output: T_01: se3: np.array with length 6
-#    """
-#    # p_RS_R_x [m], p_RS_R_y [m], p_RS_R_z [m], q_RS_w [], q_RS_x [], q_RS_y [], q_RS_z []
-#    t_R0 = tq_R0[0:3]
-#    t_R1 = tq_R1[0:3]
-#    ww0, wx0, wy0, wz0 = tq_R0[3:]
-#    ww1, wx1, wy1, wz1 = tq_R1[3:]
-
-#    q_R0 = np.quaternion(ww0, wx0, wy0, wz0)
-#    q_R0 = q_R0.normalized()
-#    q_R1 = np.quaternion(ww1, wx1, wy1, wz1)
-#    q_R1 = q_R1.normalized()
-#    t_R0_q = np.quaternion(0, t_R0[0], t_R0[1], t_R0[2])
-#    t_R1_q = np.quaternion(0, t_R1[0], t_R1[1], t_R1[2])
-
-#    # q_10 = q_R1.inverse() * q_R0
-#    # t_10_q = q_R1.inverse() * (t_R0_q - t_R1_q) * q_R1
-#    # t_10 = t_10_q.imag
-#    # tq_10 = [*t_10, *quaternion.as_float_array(q_10)]
-#    # se_10 = pose_tq_to_se(tq_10)
-
-#    q_01 = q_R0.inverse() * q_R1
-#    t_01_q = q_R0.inverse() * (t_R1_q - t_R0_q) * q_R0
-#    t_01 = t_01_q.imag
-#    tq_01 = [*t_01, *quaternion.as_float_array(q_01)]
-#    if t_euler_loss:
-#        se_01_obj = pose_tq_to_se(tq_01, return_obj=True)
-#        out_t = np.array(se_01_obj.t, dtype=float).squeeze()
-#        out_euler = rotationMatrixToEulerAngles(np.array(se_01_obj.so3.matrix(), dtype=float))
-#        #out_euler = out_euler / np.pi * 180  # in degrees
-#        se_01 = np.concatenate((out_t, out_euler))
-#    else:
-#        se_01 = pose_tq_to_se(tq_01)
-
-#    return np.array(se_01)
-
-
-def rotationMatrixToQuaternion(R):
-    # assert(isRotationMatrix(R))
-    euler_radian = rotationMatrixToEulerAngles(R)
-    return euler_to_quaternion(euler_radian, isRad=True)
-
-
-# Checks if a matrix is a valid rotation matrix.
-def isRotationMatrix(R):
-    Rt = np.transpose(R)
-    shouldBeIdentity = np.dot(Rt, R)
-    I = np.identity(3, dtype=R.dtype)
-    n = np.linalg.norm(I - shouldBeIdentity)
-    return n < 1e-3
-
-
 # Calculates rotation matrix to euler angles
 # The result is for ZYX euler angles
 def rotationMatrixToEulerAngles(R):
@@ -248,40 +190,6 @@ def makeFirstPositive(ww, wx, wy, wz):
     return q_array[0], q_array[1], q_array[2], q_array[3]
 
 
-def pose_tq_to_se(pose_tq, return_obj=False):
-    """
-    transform pose representation from (translation, quaternion) to se3
-    pose_tq: [x, y, z, ww, wx, wy, wz]
-    """
-    trans = sp.Vector3(*pose_tq[0:3])
-    ww, wx, wy, wz = makeFirstPositive(*pose_tq[3:])
-
-    q_real = ww
-    q_img = sp.Vector3(wx, wy, wz)
-    q = sp.Quaternion(q_real, q_img)
-    R = sp.So3(q)
-
-    # SO3 to SE3 to se3
-    Se3Obj = sp.Se3(R, trans)
-    numpy_vec = np.array(Se3Obj.log()).squeeze().astype(float)  # squeeze(): [6, 1] -> [6,]
-    if return_obj:
-        return Se3Obj
-    return numpy_vec
-
-
-def globalToTEuler(tq_R):
-    """
-    input: T_R0, T_R1: [timestamp, (translation, quaternion): np.array with length 7]
-    output: T_01: [timestamp, t and euler]
-    """
-    timestamp = tq_R[0]
-    se_obj = pose_tq_to_se(tq_R[1], return_obj=True)
-    out_t = np.array(se_obj.t, dtype=float).squeeze()
-    out_euler = rotationMatrixToEulerAngles(np.array(se_obj.so3.matrix(), dtype=float))
-    out_euler = out_euler / np.pi * 180  # in degrees
-    return np.array([timestamp, np.concatenate((out_t, out_euler))])
-
-
 def get_zero_se3():
     """
     output: se3 vector6 for zero movement
@@ -290,42 +198,6 @@ def get_zero_se3():
     RT = sp.Se3(sp.So3(zero_q), sp.Vector3(0, 0, 0))
     numpy_vec = np.array(RT.log()).astype(float)
     return np.concatenate(numpy_vec)
-
-
-def mean_Se3(list_Se3):
-    """
-    input: a list of Se3 object
-    return: a Se3 object averaged over Se3.log()
-    """
-    tmp_sum = list_Se3[0].log()
-    for _comp in list_Se3[1:]:
-        tmp_sum += _comp.log()
-    tmp_sum /= len(list_Se3)
-    return sp.Se3.exp(tmp_sum)
-
-
-def noise_add_(x_data, noise_std_factor, device):
-    # default for args.noise_std_factor: 0.1
-    std = x_data.std()
-    if abs(std - 0.) < 1e-5:
-        std = 1.
-    # std = 1.
-    noise = torch.empty_like(x_data).normal_(mean=x_data.mean(), std=noise_std_factor * std)
-    noise = noise.type(torch.FloatTensor).to(device)
-    tmp = x_data + noise
-    tmp = tmp.to(device)
-    return tmp
-
-
-def noise_zero_(x_data, noise_std_factor, device):
-    # default for args.noise_std_factor: 0.1
-    std = x_data.std()
-    if abs(std - 0.) < 1e-5:
-        std = 1.
-    # std = 1.
-    noise = torch.empty_like(x_data).normal_(mean=x_data.mean(), std=noise_std_factor * std)
-    noise = noise.type(torch.FloatTensor).to(device)
-    return noise
 
 
 def save_model(path, transition_model, pose_model, encoder, optimizer, epoch, metrics, observation_model=None,
@@ -356,12 +228,9 @@ def construct_models(args):
     if args.flownet_model != 'none' and args.img_prefeat == 'none':
         if args.train_img_from_scratch:
             raise ValueError('if --flownet_model -> --train_img_from_scratch should not be used')
-        if args.flownet_model == 'FlowNet2':
-            flownet_model = FlowNet2(args).to(device=args.device)
-        elif args.flownet_model == 'FlowNet2S':
+
+        if args.flownet_model == 'FlowNet2S':
             flownet_model = FlowNet2S(args).to(device=args.device)
-        elif args.flownet_model == 'FlowNet2C':
-            flownet_model = FlowNet2C(args).to(device=args.device)
         else:
             raise ValueError('--flownet_model: {} is not supported'.format(args.flownet_model))
         resume_ckp = '/data/results/ckp/pretrained_flownet/{}_checkpoint.pth.tar'.format(
@@ -459,46 +328,7 @@ def eval_rel_error(pred_rel_pose, gt_rel_pose, t_euler_loss):
             tmp_pred_rel_pose = pred_rel_pose[_i].cpu().numpy()
             tmp_gt_rel_pose = gt_rel_pose[_i].cpu().numpy()
 
-        #if t_euler_loss:
-        #    # transform t_euler to se3
-        #    tmp_pred_t = tmp_pred_rel_pose[0:3]
-        #    tmp_pred_euler = tmp_pred_rel_pose[3:]
-        #    tmp_pred_quat = euler_to_quaternion(tmp_pred_euler)
-        #    tmp_pred_rel_pose = pose_tq_to_se(np.concatenate((tmp_pred_t, tmp_pred_quat)))
-
-        #    tmp_gt_t = tmp_gt_rel_pose[0:3]
-        #    tmp_gt_euler = tmp_gt_rel_pose[3:]
-        #    tmp_gt_quat = euler_to_quaternion(tmp_gt_euler)
-        #    tmp_gt_rel_pose = pose_tq_to_se(np.concatenate((tmp_gt_t, tmp_gt_quat)))
-
-        #se_pred = sp.Vector6(*list(tmp_pred_rel_pose))
-        #se_gt = sp.Vector6(*list(tmp_gt_rel_pose))
-
-        #T_01_pred = sp.Se3.exp(se_pred)
-
-        #if se_gt[3] == se_gt[4] == se_gt[5] == 0:
-        #    T_01_gt = T_01_pred
-        #else:
-        #    T_01_gt = sp.Se3.exp(se_gt)
-
-        ## calculate eval_rel for v1 (from TT')
-        #T_01_rel = T_01_gt.inverse() * T_01_pred  # Se3 object
         T_01_rel = get_relative_pose(tmp_gt_rel_pose, tmp_pred_rel_pose)
-        #tmp_rpe_all = np.sum(np.array(T_01_rel.log(), dtype=float) ** 2)  # (4.46) in SLAM12
-        #tmp_trans = np.array(T_01_rel.t, dtype=float)
-        #tmp_rpe_trans = np.sum(np.array(T_01_rel.t, dtype=float) ** 2)  # (4.47) in SLAM12
-        #eval_rel['rpe_all'].append(np.array(tmp_rpe_all))
-        #eval_rel['rpe_trans'].append(np.array(tmp_rpe_trans))
-
-        #axis_01_rel = np.linalg.norm(np.array(T_01_rel.so3.log(), dtype=float))
-        #axis_01_rel = axis_01_rel / np.pi * 180  # transform to degrees
-        #eval_rel['rpe_rot_axis'].append(np.array(axis_01_rel))
-
-        #euler_01_rel = np.array(T_01_rel.so3.matrix(), dtype=float)
-        #euler_01_rel = rotationMatrixToEulerAngles(euler_01_rel)
-        #euler_01_rel = euler_01_rel / np.pi * 180  # transform to degrees
-        #tmp_euler = np.sum(euler_01_rel ** 2)
-        #eval_rel['rpe_rot_euler'].append(tmp_euler)
 
     test_rel['x'].append(pred_rel_pose[-1, 0].cpu().numpy())
     test_rel['y'].append(pred_rel_pose[-1, 1].cpu().numpy())
