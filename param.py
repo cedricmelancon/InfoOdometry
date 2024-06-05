@@ -1,11 +1,8 @@
 import argparse
 import os
-import pdb
 import shutil
 import torch
-import torch.nn as nn
 from torch.nn import functional as F
-import numpy as np
 
 
 class Param:
@@ -18,9 +15,11 @@ class Param:
         self.parser.add_argument('--noise_std_factor', type=float, default=0.1)
         self.parser.add_argument('--img_prefeat', type=str, default='none',
                                  help='none, flownet or resnet (not implemented yet)')
-        self.parser.add_argument('--failure_type', type=str, default='noise', help='noise, missing, mixed or none')
+        self.parser.add_argument('--failure_type', type=str, default='noise',
+                                 help='noise, missing, mixed or none')
         self.parser.add_argument('--sample_size_ratio', type=float, default=1.0,
-                                 help='the ratio of total non-overlapped clips (1) only take effect in (0,1) (2) only used in training')
+                                 help='the ratio of total non-overlapped clips (1) only take effect in (0,1) (2) only '
+                                      'used in training')
         self.parser.add_argument('--imu_only', action='store_const', default=False, const=True,
                                  help='need to be used with --transition_model double')
 
@@ -38,10 +37,13 @@ class Param:
         self.parser.add_argument('--free_nats', type=float, default=3, help='free nats')
         self.parser.add_argument('--world_kl_beta', type=float, default=0.1,
                                  help='kl weight for posterior and prior states in the world model')
-        self.parser.add_argument('--global_kl_beta', type=float, default=0, help='global kl weight (0 to disable)')
+        self.parser.add_argument('--global_kl_beta', type=float, default=0,
+                                 help='global kl weight (0 to disable)')
         self.parser.add_argument('--eval_ckp', type=str, default='best', help='best, last')
-        self.parser.add_argument('--translation_weight', type=float, default=2000, help='weight for translation_loss')
-        self.parser.add_argument('--rotation_weight', type=float, default=5000, help='weight for rotation_loss')
+        self.parser.add_argument('--translation_weight', type=float, default=2000,
+                                 help='weight for translation_loss')
+        self.parser.add_argument('--rotation_weight', type=float, default=5000,
+                                 help='weight for rotation_loss')
 
         # for soft / hard deepvio baselines
         self.parser.add_argument('--soft', action='store_const', default=False, const=True)
@@ -51,7 +53,8 @@ class Param:
                                  help="0.5 is also the default for evaluation")
         self.parser.add_argument('--gumbel_tau_epoch_ratio', type=float, default=0.5,
                                  help="the ratio of epochs used to anneal to gumbel_tau_final")
-        self.parser.add_argument('--hard_mode', type=str, default='onehot', help='onehot or gumbel_softmax')
+        self.parser.add_argument('--hard_mode', type=str, default='onehot',
+                                 help='onehot or gumbel_softmax')
 
         # for stochastic-only (double-stochastic / double-vinet-stochastic)
         self.parser.add_argument('--stochastic_mode', type=str, default='none',
@@ -61,7 +64,8 @@ class Param:
         self.parser.add_argument('--seed', type=int, default=666, help='random seed')
         self.parser.add_argument('--activation_function', type=str, default='relu', choices=dir(F),
                                  help='model activation function')
-        self.parser.add_argument('--embedding_size', type=int, default=1024, help='observation embedding size')
+        self.parser.add_argument('--embedding_size', type=int, default=1024,
+                                 help='observation embedding size')
         self.parser.add_argument('--hidden_size', type=int, default=1024, help='hidden size')
         self.parser.add_argument('--belief_size', type=int, default=1024, help='belief/hidden size')
         self.parser.add_argument('--belief_rnn', type=str, default='lstm', help='lstm or gru')
@@ -77,16 +81,20 @@ class Param:
                                  help='observation loss weight; 0 to disable')
         self.parser.add_argument('--observation_imu_beta', type=float, default=0,
                                  help='observation imu loss weight; 0 to disable')
-        self.parser.add_argument('--bit_depth', type=int, default=5, help='image bit depth (quantisation)')
-        self.parser.add_argument('--adam_epsilon', type=float, default=1e-4, help='adam optimizer epsilon value')
-        self.parser.add_argument('--grad_clip_norm', type=float, default=1500, help='gradient clipping norm')
+        self.parser.add_argument('--bit_depth', type=int, default=5,
+                                 help='image bit depth (quantisation)')
+        self.parser.add_argument('--adam_epsilon', type=float, default=1e-4,
+                                 help='adam optimizer epsilon value')
+        self.parser.add_argument('--grad_clip_norm', type=float, default=1500,
+                                 help='gradient clipping norm')
         self.parser.add_argument('--rec_loss', type=str, default='mean', choices=["sum", "mean"],
                                  help='observation reconstruction loss type: sum or mean')
         self.parser.add_argument('--load_model', type=str, default='none',
                                  help='path for pre-saved models (.pt file) to load')
 
         # args for using FlowNet2/C/S pretrained features
-        self.parser.add_argument('--train_img_from_scratch', action='store_const', default=False, const=True)
+        self.parser.add_argument('--train_img_from_scratch', action='store_const',
+                                 default=False, const=True)
         self.parser.add_argument('--img_batch_norm', type=bool, default=False,
                                  help='can only be true when --train_img_from_scratch')
         self.parser.add_argument('--direct_img', action='store_const', default=False, const=True,
@@ -97,7 +105,8 @@ class Param:
         self.parser.add_argument('--flownet_model', type=str, default='FlowNet2S',
                                  help='none, FlowNet2, FlowNet2S, FlowNet2C')
         self.parser.add_argument('--imgfeat_mode', type=str, default='flatten', help='flatten or pooling')
-        self.parser.add_argument('--prepare_flownet_features', action='store_const', default=False, const=True)
+        self.parser.add_argument('--prepare_flownet_features', action='store_const',
+                                 default=False, const=True)
 
         # args for training parameters
         self.parser.add_argument('--gpu', type=str, default='0',
@@ -107,12 +116,14 @@ class Param:
         self.parser.add_argument('--lr_warmup', action='store_const', default=False, const=True)
         self.parser.add_argument('--n_warmup_steps', type=int, default=12800)
         self.parser.add_argument('--lr_schedule', type=str, default='50,85,115,150',
-                                 help='epoch to reduce lr to intial_lr times the corresponding lr_factor, separated by , ')
+                                 help='epoch to reduce lr to intial_lr times the corresponding lr_factor, separated '
+                                      'by , ')
         self.parser.add_argument('--lr_factor', type=str, default='0.2,0.1,0.5,0.1',
                                  help='used together with --lr_schedule, separated by , ')
         self.parser.add_argument('--eval_batch_size', type=int, default=1,
                                  help='if --train: equal to batch_size; if --eval: 1 by default')
-        self.parser.add_argument('--optimizer', type=str, default='adam', help='should be either adam or sgd')
+        self.parser.add_argument('--optimizer', type=str, default='adam',
+                                 help='should be either adam or sgd')
         self.parser.add_argument('--momentum', type=float, default=0.9, help='only for sgd optimizer')
         self.parser.add_argument('--train_discard_num', type=int, default=0,
                                  help='the number of beginning frames to be discarded in training')
@@ -123,24 +134,33 @@ class Param:
         self.parser.add_argument('--imu_lstm_hidden_size', type=int, default=128)
         self.parser.add_argument('--pose_tiles', type=int, default=10,
                                  help='the tile number of previous poses of last timestamp')
-        self.parser.add_argument('--rgb_maxrgb_max', type=float, default=255., help='the max value of image data')
+        self.parser.add_argument('--rgb_maxrgb_max', type=float, default=255.,
+                                 help='the max value of image data')
         self.parser.add_argument('--eval_interval', type=int, default=1,
                                  help='the frequency (by epoch) to eval and save the ckp')
 
         # args for dataset
-        self.parser.add_argument('--dataset', type=str, default='euroc', choices=["kitti", "mit", "euroc", "vkitti2"],
+        self.parser.add_argument('--dataset', type=str, default='mit',
+                                 choices=["kitti", "mit", "euroc", "vkitti2"],
                                  help='euroc, kitti (determine base_dir, train/eval_sequences')
         self.parser.add_argument('--base_dir', type=str, default='/data', help='should not be specified')
         self.parser.add_argument('--train_sequences', type=str,
-                                 default='2012-01-25-12-14-25,2012-04-03-07-56-24,2012-04-03-07-56-24,2012-05-02-06-23-02,2012-01-28-12-38-24,2012-01-28-12-38-24,2012-01-27-07-37-01,2012-01-27-07-37-01,2012-02-02-10-44-08',
-                                 #default='2012-04-03-07-56-24',
+                                 default='2012-01-25-12-14-25,2012-04-03-07-56-24,2012-04-03-07-56-24,'
+                                         '2012-05-02-06-23-02,2012-01-28-12-38-24,2012-01-28-12-38-24,'
+                                         '2012-01-27-07-37-01,2012-01-27-07-37-01,2012-02-02-10-44-08',
                                  help='separated by , ')
         self.parser.add_argument('--train_sequences_gt', type=str,
-                                 default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part4_floor2,2012-04-03-07-56-24_part1_floor2,2012-05-02-06-23-02_part2_floor2,2012-01-28-12-38-24_part1_floor2,2012-01-28-12-38-24_part4_floor2,2012-01-27-07-37-01_part1_floor2,2012-01-27-07-37-01_part3_floor2,2012-02-02-10-44-08_part1_floor2',
-                                 #default='2012-04-03-07-56-24_part1_floor2',
+                                 default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part4_floor2,'
+                                         '2012-04-03-07-56-24_part1_floor2,2012-05-02-06-23-02_part2_floor2,'
+                                         '2012-01-28-12-38-24_part1_floor2,2012-01-28-12-38-24_part4_floor2,'
+                                         '2012-01-27-07-37-01_part1_floor2,2012-01-27-07-37-01_part3_floor2,'
+                                         '2012-02-02-10-44-08_part1_floor2',
                                  help='separated by , ')
-        self.parser.add_argument('--eval_sequences', type=str, default='2012-04-03-07-56-24', help='separated by , ')
-        self.parser.add_argument('--eval_sequences_gt', type=str, default='2012-04-03-07-56-24_part1_floor2', help='separated by , ')
+        self.parser.add_argument('--eval_sequences', type=str, default='2012-04-03-07-56-24',
+                                 help='separated by , ')
+        self.parser.add_argument('--eval_sequences_gt', type=str,
+                                 default='2012-04-03-07-56-24_part1_floor2',
+                                 help='separated by , ')
         self.parser.add_argument('--clip_length', type=int, default=7)
         self.parser.add_argument('--clip_overlap', action='store_const', default=False, const=True)
         self.parser.add_argument('--euroc_ds_train', type=str, default="both",
@@ -150,7 +170,8 @@ class Param:
         self.parser.add_argument('--euroc_ds_type', type=str, default=None,
                                  help="Deprecated => Remain here for code compacity in eval")
         self.parser.add_argument('--resize_mode', type=str, default='rescale', help='crop or rescale')
-        self.parser.add_argument('--new_img_size', type=str, default='480,640', help='two int separated by , ')
+        self.parser.add_argument('--new_img_size', type=str, default='480,640',
+                                 help='two int separated by , ')
 
         # args for evaluating euroc
         self.parser.add_argument('--eval_euroc_interp', action='store_const', default=False, const=True,
@@ -163,7 +184,8 @@ class Param:
 
         # args with store_const type
         self.parser.add_argument('--eval', action='store_const', default=False, const=True, help='eval')
-        self.parser.add_argument('--debug', action='store_const', default=False, const=True, help='fast debug')
+        self.parser.add_argument('--debug', action='store_const', default=False, const=True,
+                                 help='fast debug')
         self.parser.add_argument('--on_the_fly', action='store_const', default=False, const=True)
         self.parser.add_argument('--eval_global', action='store_const', default=False, const=True,
                                  help='whether evaluate global error')
@@ -172,7 +194,8 @@ class Param:
 
         # transformer parameters
         self.parser.add_argument('--tfm_enc_last', action='store_const', default=False, const=True,
-                                 help='whether use the last element or the mean of transformer encoder output seq for imu encoding, mean by default')
+                                 help='whether use the last element or the mean of transformer encoder output seq for '
+                                      'imu encoding, mean by default')
         self.parser.add_argument('--tfm_clip_last', action='store_const', default=False, const=True,
                                  help='only predict the last frame-pair pose')
 
@@ -189,7 +212,7 @@ class Param:
         self.parser.add_argument("--rec_flow_split", type=str, default="2012-2015",
                                  help="train-val, e.g. 2012-2015 or 2015-2012")
 
-        ## NOTE: Parameters for generalization ablation studies
+        # NOTE: Parameters for generalization ablation studies
         self.parser.add_argument("--vkitti2_clone_only", action='store_const', default=False, const=True,
                                  help="for --dataset vkitti2: only use the clone subscene")
         self.parser.add_argument("--vkitti2_eval_subscene", type=str, nargs='+',
@@ -198,13 +221,11 @@ class Param:
                                  help="kitti(1024x5x19) or euroc (1024x8x12): The flowfeat size of current experiment")
         self.parser.add_argument("--eval_outname", type=str, default="tmp",
                                  help="output name to be saved in eval/ when --eval")
-        self.parser.add_argument("--finetune_only_decoder", action='store_const', default=False, const=True,
+        self.parser.add_argument("--finetune_only_decoder", action='store_const', default=False,
+                                 const=True,
                                  help="fix encoder and transition_model and only finetune the decoder")
         self.parser.add_argument("--finetune", action='store_const', default=False, const=True,
                                  help="tell the system that we are finetuning")
-        # self.parser.add_argument("--", help="for --dataset vkitti2")
-        # self.parser.add_argument("--", help="for --dataset vkitti2")
-        # self.parser.add_argument("--", help="for --dataset vkitti2")
 
         self.args = self.parser.parse_args()
         if self.args.eval:
@@ -246,12 +267,14 @@ class Param:
             self.check_eligibility()
         else:
             # training mode
-            #self.args.eval_batch_size = self.args.batch_size
+            # self.args.eval_batch_size = self.args.batch_size
             if self.args.dataset == 'euroc':
                 self.args.base_dir = 'data/euroc/'
                 if self.args.train_sequences == 'none':
                     # otherwise use the train_sequences specified by the user
-                    self.args.train_sequences = 'V1_01_easy,V2_01_easy,MH_01_easy,MH_02_easy,V1_02_medium,V2_02_medium,MH_03_medium,V1_03_difficult,V2_03_difficult,MH_05_difficult'
+                    self.args.train_sequences = ('V1_01_easy,V2_01_easy,MH_01_easy,MH_02_easy,V1_02_medium,'
+                                                 'V2_02_medium,MH_03_medium,V1_03_difficult,V2_03_difficult,'
+                                                 'MH_05_difficult')
                 if self.args.eval_sequences == 'none':
                     self.args.eval_sequences = 'MH_04_difficult'
             elif self.args.dataset == 'kitti':
@@ -308,7 +331,6 @@ class Param:
             with open('{}{}/src/args.txt'.format(self.args.ckp_dir, self.args.exp_name), mode='w') as f:
                 arg_dict = vars(self.args)
                 sorted_keys = sorted(arg_dict.keys())
-                max_len = max([len(x) for x in sorted_keys])
                 for _key in sorted_keys:
                     f.write('--{}\t{}\n'.format(_key, arg_dict[_key]))
 
@@ -348,8 +370,10 @@ class Param:
                         'the specified eval_sequence folder {}{} does not exist'.format(self.args.base_dir, seq))
         elif self.args.dataset == 'kitti':
             # import pdb; pdb.set_trace()
-            if type(self.args.train_sequences) == str: self.args.train_sequences = self.args.train_sequences.split(",")
-            if type(self.args.eval_sequences) == str: self.args.eval_sequences = self.args.eval_sequences.split(",")
+            if type(self.args.train_sequences) == str:
+                self.args.train_sequences = self.args.train_sequences.split(",")
+            if type(self.args.eval_sequences) == str:
+                self.args.eval_sequences = self.args.eval_sequences.split(",")
             for seq in self.args.train_sequences:
                 if not os.path.isdir('{}/sequences/{}'.format(self.args.base_dir, seq)):
                     raise ValueError(
@@ -395,21 +419,3 @@ def read_args(arg_file):
                     _comp = _comp.replace(_char, "")
                 prev_args.append(_comp)
     return prev_args
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
