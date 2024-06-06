@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/pytorch:24.03-py3
+FROM nvcr.io/nvidia/pytorch:23.06-py3
 
 ARG DEBIAN_FRONTEND=noninteractive
 #ENV PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
