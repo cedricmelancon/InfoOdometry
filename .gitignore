@@ -12,12 +12,12 @@ __pycache__/
 .idea/
 
 flownet/**/*.so
-flownet/channelnorm_package/build/
-flownet/channelnorm_package/dist/
-flownet/correlation_package/build/
-flownet/correlation_package/dist/
-flownet/resample2d_package/build/
-flownet/resample2d_package/dist/
+src/info_odometry/info_odometry/flownet/channelnorm_package/build/
+src/info_odometry/info_odometry/flownet/channelnorm_package/dist/
+src/info_odometry/info_odometry/flownet/correlation_package/build/
+src/info_odometry/info_odometry/flownet/correlation_package/dist/
+src/info_odometry/info_odometry/flownet/resample2d_package/build/
+src/info_odometry/info_odometry/flownet/resample2d_package/dist/
 
 
 
