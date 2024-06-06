@@ -2,7 +2,7 @@
 // README at: https://github.com/devcontainers/templates/tree/main/src/cpp
 {
 	"name": "AI Workspace",
-	"image": "cedricmelancon/ai-dev-environment:latest",
+	"image": "cedricmelancon/ros2_ai:latest",
 	//"image": "cedricmelancon/ros-ai:latest",
     "runArgs": ["--gpus=all", "-p 6006:6006"],
     //"workspaceMount": "source=${localWorkspaceFolder}/Localization,target=/workspace/,type=bind",
