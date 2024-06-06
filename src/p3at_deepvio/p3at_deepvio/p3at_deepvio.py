@@ -16,13 +16,14 @@ class P3atDeepvio(Node):
 
         self._imu_lock = Lock()
 
-        self._publisher = self.create_publisher * (Odometry, 'deepvio_odometry', 10)
+        self._publisher = self.create_publisher(Odometry, 'deepvio_odometry', 10)
         self._camera_subscriber = self.create_subscription(Image, 'camera_img_tbd', self.camera_callback, 10)
         self._imu_subscriber = self.create_subscription(Imu, 'imu', self.imu_callback, 10)
         self._imu_data = []
         self._camera_features = []
         self._last_position = None
         self._last_stamp = None
+        self.get_logger().info('C\'est parti!')
 
     def camera_callback(self, msg):
         self._imu_lock.acquire()

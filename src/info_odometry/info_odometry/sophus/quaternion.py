@@ -1,6 +1,6 @@
 """ run with: python3 -m sophus.quaternion """
 
-import sophus
+#import sophus
 import sympy
 import sys
 import unittest

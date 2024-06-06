@@ -12,16 +12,8 @@ __pycache__/
 .idea/
 
 flownet/**/*.so
-src/info_odometry/info_odometry/flownet/channelnorm_package/build/
-src/info_odometry/info_odometry/flownet/channelnorm_package/dist/
-src/info_odometry/info_odometry/flownet/correlation_package/build/
-src/info_odometry/info_odometry/flownet/correlation_package/dist/
-src/info_odometry/info_odometry/flownet/resample2d_package/build/
-src/info_odometry/info_odometry/flownet/resample2d_package/dist/
-
-
-
-
-
+src/build/**
+src/log/**
+src/install/**
 
 .vscode/settings.json

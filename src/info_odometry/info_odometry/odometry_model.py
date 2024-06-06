@@ -1,8 +1,8 @@
 import torch
 import os
 
-from info_model import bottle
-from utils.tools import construct_models
+from info_odometry.info_model import bottle
+from info_odometry.utils.tools import construct_models
 
 
 class OdometryModel:
