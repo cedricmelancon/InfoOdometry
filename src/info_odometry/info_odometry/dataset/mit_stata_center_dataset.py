@@ -8,12 +8,12 @@ import random
 
 # from torch._six import int_classes as _int_classes
 
-from src.info_odometry.info_odometry.utils.mit_file_io import read_mit_pose
-from src.info_odometry.info_odometry.utils.mit_file_io import read_mit_img
-from src.info_odometry.info_odometry.utils.mit_file_io import read_mit_imu
-from src.info_odometry.info_odometry.utils.mit_file_io import get_mit_imgpair
-from src.info_odometry.info_odometry.utils.mit_file_io import get_pose_by_timestamps
-from src.info_odometry.info_odometry.utils.mit_file_io import get_mit_depthpair
+from info_odometry.utils.mit_file_io import read_mit_pose
+from info_odometry.utils.mit_file_io import read_mit_img
+from info_odometry.utils.mit_file_io import read_mit_imu
+from info_odometry.utils.mit_file_io import get_mit_imgpair
+from info_odometry.utils.mit_file_io import get_pose_by_timestamps
+from info_odometry.utils.mit_file_io import get_mit_depthpair
 
 from utils.tools import get_relative_pose
 import flownet_utils.frame_utils as frame_utils

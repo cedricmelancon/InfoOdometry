@@ -27,10 +27,10 @@ class Param:
         self.parser.add_argument('--world_kl_out', action='store_const', default=False, const=True)
 
         # args for uncertainty measurement
-        self.parser.add_argument('--transition_model', type=str, default='single',
+        self.parser.add_argument('--transition_model', type=str, default='deepvio',
                                  help='single, double, single-vinet, multi-vinet, deepvo, deepvio')
         self.parser.add_argument('--rec_type', type=str, default='posterior', help='posterior or prior')
-        self.parser.add_argument('--imu_rnn', type=str, default='lstm', help='gru or lstm')
+        self.parser.add_argument('--imu_rnn', type=str, default='gru', help='gru or lstm')
         self.parser.add_argument('--eval_uncertainty', action='store_const', default=False, const=True)
         self.parser.add_argument('--uncertainty_groups', type=int, default=1, help='1, 2')
         self.parser.add_argument('--kl_free_nats', type=str, default='max', help='none, min, max')
@@ -67,10 +67,10 @@ class Param:
         self.parser.add_argument('--embedding_size', type=int, default=1024,
                                  help='observation embedding size')
         self.parser.add_argument('--hidden_size', type=int, default=1024, help='hidden size')
-        self.parser.add_argument('--belief_size', type=int, default=1024, help='belief/hidden size')
+        self.parser.add_argument('--belief_size', type=int, default=512, help='belief/hidden size')
         self.parser.add_argument('--belief_rnn', type=str, default='lstm', help='lstm or gru')
         self.parser.add_argument('--state_size', type=int, default=1024, help='state/latent size')
-        self.parser.add_argument('--batch_size', type=int, default=64, help='batch size')
+        self.parser.add_argument('--batch_size', type=int, default=24, help='batch size')
         self.parser.add_argument('--overshooting_distance', type=int, default=10,
                                  help='latent overshooting distance/latent overshooting weight for t=1')
         self.parser.add_argument('--overshooting_kl_beta', type=float, default=0,
@@ -89,8 +89,10 @@ class Param:
                                  help='gradient clipping norm')
         self.parser.add_argument('--rec_loss', type=str, default='mean', choices=["sum", "mean"],
                                  help='observation reconstruction loss type: sum or mean')
-        self.parser.add_argument('--load_model', type=str, default='none',
+        self.parser.add_argument('--load_model', type=str, default='none',  # '/data/results/ckp/ckp_best-eval-loss.pt',
                                  help='path for pre-saved models (.pt file) to load')
+        #self.parser.add_argument('--load_model', type=str, default='none',
+        #                         help='path for pre-saved models (.pt file) to load')
 
         # args for using FlowNet2/C/S pretrained features
         self.parser.add_argument('--train_img_from_scratch', action='store_const',
@@ -144,6 +146,12 @@ class Param:
                                  choices=["kitti", "mit", "euroc", "vkitti2"],
                                  help='euroc, kitti (determine base_dir, train/eval_sequences')
         self.parser.add_argument('--base_dir', type=str, default='/data', help='should not be specified')
+        #self.parser.add_argument('--train_sequences', type=str,
+        #                         default='2012-04-03-07-56-24')
+        #self.parser.add_argument('--train_sequences_gt', type=str,
+        #                         default='2012-04-03-07-56-24_part1_floor2',
+        #                         help='separated by , ')
+
         self.parser.add_argument('--train_sequences', type=str,
                                  default='2012-01-25-12-14-25,2012-04-03-07-56-24,2012-04-03-07-56-24,'
                                          '2012-05-02-06-23-02,2012-01-28-12-38-24,2012-01-28-12-38-24,'
@@ -156,6 +164,7 @@ class Param:
                                          '2012-01-27-07-37-01_part1_floor2,2012-01-27-07-37-01_part3_floor2,'
                                          '2012-02-02-10-44-08_part1_floor2',
                                  help='separated by , ')
+
         self.parser.add_argument('--eval_sequences', type=str, default='2012-04-03-07-56-24',
                                  help='separated by , ')
         self.parser.add_argument('--eval_sequences_gt', type=str,
@@ -169,8 +178,8 @@ class Param:
                                  choices=["downsample", "raw_freq", "both"])
         self.parser.add_argument('--euroc_ds_type', type=str, default=None,
                                  help="Deprecated => Remain here for code compacity in eval")
-        self.parser.add_argument('--resize_mode', type=str, default='rescale', help='crop or rescale')
-        self.parser.add_argument('--new_img_size', type=str, default='480,640',
+        self.parser.add_argument('--resize_mode', type=str, default='crop', help='crop or rescale')
+        self.parser.add_argument('--new_img_size', type=str, default='240,424',
                                  help='two int separated by , ')
 
         # args for evaluating euroc
@@ -243,11 +252,12 @@ class Param:
             curr_eval_sequences = self.args.eval_sequences
 
             # curr_eval_sequences = self.args.eval_sequences
-            prev_arg_file = '{}{}/src/args.txt'.format(self.args.ckp_dir, self.args.exp_name)
-            prev_args = read_args(prev_arg_file)
-            self.args = self.parser.parse_args(prev_args)
-            for _arg in bk_args:
-                setattr(self.args, _arg, bk_vals[_arg])
+            if self.args.exp_name != '':
+                prev_arg_file = '{}{}/src/args.txt'.format(self.args.ckp_dir, self.args.exp_name)
+                prev_args = read_args(prev_arg_file)
+                self.args = self.parser.parse_args(prev_args)
+                for _arg in bk_args:
+                    setattr(self.args, _arg, bk_vals[_arg])
 
             self.args.flowfeat_size_dataset = curr_flowfeat_size_dataset
 
@@ -298,41 +308,45 @@ class Param:
             self.args.eval_sequences = self.args.eval_sequences.split(',')
             self.args.eval_sequences_gt = self.args.eval_sequences_gt.split(',')
             self.check_eligibility()
-            exp_folder = '{}{}'.format(self.args.ckp_dir, self.args.exp_name)
-            if os.path.isdir(exp_folder):
-                if self.args.exp_name == 'tmp':
-                    shutil.rmtree(exp_folder)
-                else:
-                    # raise ValueError('residues exist for the specified experiment {}'.format(exp_folder))
-                    shutil.rmtree(exp_folder)
-            os.mkdir(exp_folder)
 
-            tb_folder = '{}{}'.format(self.args.tb_dir, self.args.exp_name)
-            if os.path.isdir(tb_folder):
-                if self.args.exp_name == 'tmp':
-                    shutil.rmtree(tb_folder)
-                else:
-                    # raise ValueError('residues exist for the specified experiment {}'.format(tb_folder))
-                    shutil.rmtree(tb_folder)
-            os.mkdir(tb_folder)
+            if self.args.exp_name != '':
+                exp_folder = '{}{}'.format(self.args.ckp_dir, self.args.exp_name)
+                if os.path.isdir(exp_folder):
+                    if self.args.exp_name == 'tmp':
+                        shutil.rmtree(exp_folder)
+                    else:
+                        # raise ValueError('residues exist for the specified experiment {}'.format(exp_folder))
+                        shutil.rmtree(exp_folder)
+                os.mkdir(exp_folder)
 
-            # backup codes
-            pyfiles = [
-                '*.py',
-                'dataset/*.py',
-                'scripts/*.py',
-                'utils/*.py',
-            ]
-            os.mkdir('{}{}/src'.format(self.args.ckp_dir, self.args.exp_name))
-            for pyfile in pyfiles:
-                os.system('cp {} {}{}/src/'.format(pyfile, self.args.ckp_dir, self.args.exp_name))
+            if self.args.tb_dir != '':
+                tb_folder = '{}{}'.format(self.args.tb_dir, self.args.exp_name)
+                if os.path.isdir(tb_folder):
+                    if self.args.exp_name == 'tmp':
+                        shutil.rmtree(tb_folder)
+                    else:
+                        # raise ValueError('residues exist for the specified experiment {}'.format(tb_folder))
+                        shutil.rmtree(tb_folder)
+                os.mkdir(tb_folder)
 
-            # write args before any changes
-            with open('{}{}/src/args.txt'.format(self.args.ckp_dir, self.args.exp_name), mode='w') as f:
-                arg_dict = vars(self.args)
-                sorted_keys = sorted(arg_dict.keys())
-                for _key in sorted_keys:
-                    f.write('--{}\t{}\n'.format(_key, arg_dict[_key]))
+            if self.args.exp_name != '':
+                # backup codes
+                pyfiles = [
+                    '*.py',
+                    'dataset/*.py',
+                    'scripts/*.py',
+                    'utils/*.py',
+                ]
+                os.mkdir('{}{}/src'.format(self.args.ckp_dir, self.args.exp_name))
+                for pyfile in pyfiles:
+                    os.system('cp {} {}{}/src/'.format(pyfile, self.args.ckp_dir, self.args.exp_name))
+
+                # write args before any changes
+                with open('{}{}/src/args.txt'.format(self.args.ckp_dir, self.args.exp_name), mode='w') as f:
+                    arg_dict = vars(self.args)
+                    sorted_keys = sorted(arg_dict.keys())
+                    for _key in sorted_keys:
+                        f.write('--{}\t{}\n'.format(_key, arg_dict[_key]))
 
         if not self.args.eval:
             self.args.lr_schedule = [int(x) for x in self.args.lr_schedule.split(',')]
@@ -386,8 +400,8 @@ class Param:
         if not os.path.isdir(self.args.ckp_dir):
             raise ValueError('the specified checkpoint folder {} does not exist'.format(self.args.ckp_dir))
 
-        if not os.path.isdir(self.args.tb_dir):
-            raise ValueError('the specified tensorboard folder {} does not exist'.format(self.args.tb_dir))
+        #if not os.path.isdir(self.args.tb_dir):
+        #    raise ValueError('the specified tensorboard folder {} does not exist'.format(self.args.tb_dir))
 
         if len(self.args.sensors) == 0:
             raise ValueError('at least one sensor should be specified as input')

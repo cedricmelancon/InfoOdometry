@@ -7,9 +7,11 @@ from sensor_msgs.msg import Imu
 
 from threading import Lock
 import numpy as np
-from info_odometry.odometry_model import OdometryModel
 import torch
 import collections
+
+from info_odometry.odometry_model import OdometryModel
+from info_odometry.param import Param
 
 
 class P3atDeepvio(Node):
@@ -18,7 +20,13 @@ class P3atDeepvio(Node):
 
         self._imu_lock = Lock()
 
-        self._odometry_model = OdometryModel()
+        param = Param()
+        args = param.get_args()
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed(args.seed)
+
+        self._odometry_model = OdometryModel(args)
         self._publisher = self.create_publisher(Odometry, 'deepvio_odometry', 10)
         self._camera_subscriber = self.create_subscription(Image, 'camera_img_tbd', self.camera_callback, 10)
         self._imu_subscriber = self.create_subscription(Imu, 'imu', self.imu_callback, 10)

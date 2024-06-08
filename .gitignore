@@ -13,7 +13,7 @@ __pycache__/
 
 flownet/**/*.so
 src/build/**
-src/log/**
+src/log/
 src/install/**
 
 .vscode/settings.json

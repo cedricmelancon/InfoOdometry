@@ -68,13 +68,13 @@ def train(args):
         else:
             raise ValueError('optimizer {} is currently not supported'.format(args.optimizer))
 
-    if not args.finetune:
+    #if not args.finetune and 'optimizer' in model.model_dicts:
         # for vkitti2 we are finetuning v.s. fot kitti and euroc we are resuming
         # NOTE: for --finetune we will our own optimizer setting
-        optimizer.load_state_dict(model.model_dicts["optimizer"], strict=True)
+        #optimizer.load_state_dict(model.model_dicts["optimizer"], strict=True)
 
     if not args.lr_warmup:
-        lmbda = lambda epoch: factor_lr_schedule(epoch, divide_epochs=args.lr_schedule, lr_factors=args.lr_factor)
+        #lmbda = lambda epoch: factor_lr_schedule(epoch, divide_epochs=args.lr_schedule, lr_factors=args.lr_factor)
         #scheduler = LambdaLR(optimizer, lr_lambda=lmbda)
         scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.75, patience=10, threshold_mode='abs')
 
@@ -147,7 +147,7 @@ def train(args):
 
             x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 11, 6]
             running_batch_size = x_img_pairs.size()[1] # might be different for the last batch
-            
+
             # transitions start at time t = 0 
             # create initial belief and state for time t = 0
             init_state = torch.zeros(running_batch_size, args.state_size, device=args.device)

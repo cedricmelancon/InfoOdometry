@@ -27,6 +27,9 @@ class OdometryModel:
         if args.finetune:
             assert args.load_model != "none"
 
+        if args.load_model != 'none':
+            self.load_model(args.load_model)
+
         if args.finetune_only_decoder:
             self.param_list = list(self.pose_model.parameters())
         else:
