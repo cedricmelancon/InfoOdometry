@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
-from src.info_odometry.info_odometry.info_model import PoseModel
+from info_odometry.info_model import PoseModel
 
 
 class SeqVINet(nn.Module):

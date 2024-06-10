@@ -179,11 +179,12 @@ class OdometryModel:
                 prior_std_devs, \
                 posterior_states, \
                 posterior_means, \
-                posterior_std_devs, \
-                pred_rel_poses = self.transition_model(prev_state=init_state,  # not used if not use_info
+                posterior_std_devs = self.transition_model(prev_state=init_state,  # not used if not use_info
                                                        poses=self.pose_model,
                                                        prev_belief=beliefs,
                                                        observations=encode_observations)
+
+            pred_rel_poses = bottle(self.pose_model, (posterior_states,))
 
         return beliefs, \
             prior_states, \
