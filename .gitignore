@@ -17,3 +17,5 @@ src/log/
 src/install/**
 
 .vscode/settings.json
+
+src/install/
