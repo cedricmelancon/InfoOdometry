@@ -30,7 +30,7 @@ class Param:
         self.parser.add_argument('--transition_model', type=str, default='deepvio',
                                  help='single, double, single-vinet, multi-vinet, deepvo, deepvio')
         self.parser.add_argument('--rec_type', type=str, default='posterior', help='posterior or prior')
-        self.parser.add_argument('--imu_rnn', type=str, default='lstm', help='gru or lstm')
+        self.parser.add_argument('--imu_rnn', type=str, default='gru', help='gru or lstm')
         self.parser.add_argument('--eval_uncertainty', action='store_const', default=False, const=True)
         self.parser.add_argument('--uncertainty_groups', type=int, default=1, help='1, 2')
         self.parser.add_argument('--kl_free_nats', type=str, default='max', help='none, min, max')
@@ -70,7 +70,7 @@ class Param:
         self.parser.add_argument('--belief_size', type=int, default=512, help='belief/hidden size')
         self.parser.add_argument('--belief_rnn', type=str, default='lstm', help='lstm or gru')
         self.parser.add_argument('--state_size', type=int, default=1024, help='state/latent size')
-        self.parser.add_argument('--batch_size', type=int, default=24, help='batch size')
+        self.parser.add_argument('--batch_size', type=int, default=8, help='batch size')
         self.parser.add_argument('--overshooting_distance', type=int, default=10,
                                  help='latent overshooting distance/latent overshooting weight for t=1')
         self.parser.add_argument('--overshooting_kl_beta', type=float, default=0,
@@ -89,7 +89,7 @@ class Param:
                                  help='gradient clipping norm')
         self.parser.add_argument('--rec_loss', type=str, default='mean', choices=["sum", "mean"],
                                  help='observation reconstruction loss type: sum or mean')
-        self.parser.add_argument('--load_model', type=str, default='none',  # '/data/results/ckp/ckp_best-eval-loss.pt',
+        self.parser.add_argument('--load_model', type=str, default='/data/results/ckp/ckp_best-eval-loss.pt',
                                  help='path for pre-saved models (.pt file) to load')
         #self.parser.add_argument('--load_model', type=str, default='none',
         #                         help='path for pre-saved models (.pt file) to load')

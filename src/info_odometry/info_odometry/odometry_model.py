@@ -10,6 +10,7 @@ class OdometryModel:
         self.args = args
         self.model_dicts = None
 
+        print(args.device)
         # use_imu: denote whether img and imu are used at the same time
         # args.imu_only: denote only imu is used
         (self.flownet_model,
@@ -21,6 +22,7 @@ class OdometryModel:
          self.pose_model,
          self.encoder) = construct_models(args)
 
+        self.clip_length = args.clip_length
         if args.finetune_only_decoder:
             assert args.finetune
             print("=> only finetune pose_model, while fixing encoder and transition_model")
@@ -174,23 +176,13 @@ class OdometryModel:
 
             # with one more returns: poses
             beliefs, \
-                prior_states, \
-                prior_means, \
-                prior_std_devs, \
                 posterior_states, \
-                posterior_means, \
-                posterior_std_devs = self.transition_model(prev_state=init_state,  # not used if not use_info
-                                                       poses=self.pose_model,
-                                                       prev_belief=beliefs,
-                                                       observations=encode_observations)
+                _ = self.transition_model(prev_state=init_state,  # not used if not use_info
+                                          poses=self.pose_model,
+                                          prev_belief=beliefs,
+                                          observations=encode_observations)
 
             pred_rel_poses = bottle(self.pose_model, (posterior_states,))
 
         return beliefs, \
-            prior_states, \
-            prior_means, \
-            prior_std_devs, \
-            posterior_states, \
-            posterior_means, \
-            posterior_std_devs, \
             pred_rel_poses
