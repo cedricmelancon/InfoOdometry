@@ -19,3 +19,5 @@ src/install/**
 .vscode/settings.json
 
 src/install/
+
+.hypothesis/
