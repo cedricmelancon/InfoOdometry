@@ -18,6 +18,7 @@ class SeqVINet(nn.Module):
         super().__init__()
         self.args = args
         self.use_imu = use_imu
+        self.T = self.args.clip_length + 1
         self.use_soft = args.soft
         self.use_hard = args.hard
         self.embedding_size = embedding_size
@@ -105,28 +106,67 @@ class SeqVINet(nn.Module):
                         bias.data[start:end].fill_(10.)
 
 
-    def execute_model(self, prev_rnn_embed_imu_hidden, observation_imu, observation_visual, observation, prev_fusion_features, prev_fusion_lstm_hiddens):
+    def execute_model(self, 
+                      rnn_embed_imu_hiddens, 
+                      observations_imu, 
+                      observations_visual, 
+                      observation, 
+                      fusion_features, 
+                      fusion_lstm_hiddens,
+                      poses,
+                      pred_poses,
+                      t):
+        use_pose_model = True if type(poses) == PoseModel else False
+        t_ = t - 1 # Use t_ to deal with different time indexing for observations
+
         if self.use_imu:
-            hidden, rnn_embed_imu_hidden = self.rnn_embed_imu(observation_imu, prev_rnn_embed_imu_hidden)
-            fused_feat = torch.cat([observation_visual, hidden[:,-1,:]], dim=1)
+            hidden, rnn_embed_imu_hiddens[t + 1] = self.rnn_embed_imu(observations_imu[t_ + 1], rnn_embed_imu_hiddens[t])
+            fused_feat = torch.cat([observations_visual[t_ + 1], hidden[:,-1,:]], dim=1)
                 
             hidden = self.act_fn(self.dropout(self.fc_embed_sensors(fused_feat), 0.5))
         else:
             hidden = self.act_fn(self.dropout(self.fc_embed_sensors(observation), 0.5))
             
         if self.args.belief_rnn == 'gru':
-            fusion_features = self.rnn_fusion(hidden, prev_fusion_features[t])
+            fusion_features[t + 1] = self.rnn_fusion(hidden, fusion_features[t])
         elif self.args.belief_rnn == 'lstm':
             hidden = hidden.unsqueeze(1)
-            fusion_feature_rnn, fusion_lstm_hiddens = self.rnn_fusion(hidden, prev_fusion_lstm_hiddens)
+            fusion_feature_rnn, fusion_lstm_hiddens[t + 1] = self.rnn_fusion(hidden, fusion_lstm_hiddens[t])
             fusion_features[t + 1] = fusion_feature_rnn.squeeze(1)
         hidden = self.act_fn(self.dropout(self.fc_embed_fusion(fusion_features[t + 1]), 0.6))
         out_features = self.fc_out_fusion(hidden)
         if use_pose_model:
             with torch.no_grad():
-                pred_pose = poses(out_features[t_ + 1])
+                pred_poses[t_ + 1] = poses(out_features[t_ + 1])
 
-        return rnn_embed_imu_hidden, fusion_lstm_hiddens, fusion_features, out_features, pred_pose
+        return rnn_embed_imu_hiddens, fusion_lstm_hiddens, fusion_features, out_features, pred_poses
+
+    def init_data(self, observations, poses, prev_belief):
+        if self.use_imu:
+            observations_visual = observations[0] # [batch, 1024]
+            observations_imu = observations[1] # [batch, 11, 6]
+
+        use_pose_model = True if type(poses) == PoseModel else False
+
+        fusion_hiddens, fusion_features, out_features = [torch.empty(0)] * T, [torch.empty(0)] * T, [torch.empty(0)] * (T-1)
+        fusion_hiddens[0], fusion_features[0] = prev_belief, prev_belief
+        if self.args.belief_rnn == 'lstm':
+            fusion_lstm_hiddens = fusion_hiddens = [torch.empty(0)] * T
+            fusion_lstm_hiddens[0] = (prev_belief.unsqueeze(0).repeat(2, 1, 1), prev_belief.unsqueeze(0).repeat(2, 1, 1))
+        
+        if self.use_imu:
+            running_batch_size = prev_belief.size()[0]
+            rnn_embed_imu_hiddens = [(torch.empty(0))] * T
+            prev_rnn_embed_imu_hidden = torch.zeros(2, running_batch_size, self.args.embedding_size, device=self.args.device)
+            if self.args.imu_rnn == 'lstm':
+                rnn_embed_imu_hiddens[0] = (prev_rnn_embed_imu_hidden, prev_rnn_embed_imu_hidden)
+            elif self.args.imu_rnn == 'gru':
+                rnn_embed_imu_hiddens[0] = prev_rnn_embed_imu_hidden
+        
+        if use_pose_model:
+            pred_poses = [torch.empty(0)] * (T-1)
+
+        return rnn_embed_imu_hiddens, observations_imu, observations_visual, fusion_lstm_hiddens, fusion_features, out_features, pred_poses
 
     # Operates over (previous) state, (previous) poses, (previous) belief, (previous) nonterminals (mask), and (current) observations
     # Diagram of expected inputs and outputs for T = 5 (-x- signifying beginning of output belief/state that gets sliced off):
@@ -145,29 +185,16 @@ class SeqVINet(nn.Module):
         prev_belief: i.e. prev_hidden (for code consistency in main.py)
         gumbel_temperature: the default value 0.5 is used for evaluation
         """
-        if self.use_imu:
-            observations_visual = observations[0] # [batch, 1024]
-            observations_imu = observations[1] # [batch, 11, 6]
-
         use_pose_model = True if type(poses) == PoseModel else False
         T = self.args.clip_length + 1
-        fusion_hiddens, fusion_features, out_features = [torch.empty(0)] * T, [torch.empty(0)] * T, [torch.empty(0)] * (T-1)
-        fusion_hiddens[0], fusion_features[0] = prev_belief, prev_belief
-        if self.args.belief_rnn == 'lstm':
-            fusion_lstm_hiddens = fusion_hiddens = [torch.empty(0)] * T
-            fusion_lstm_hiddens[0] = (prev_belief.unsqueeze(0).repeat(2, 1, 1), prev_belief.unsqueeze(0).repeat(2, 1, 1))
-        
-        if self.use_imu:
-            running_batch_size = prev_belief.size()[0]
-            rnn_embed_imu_hiddens = [(torch.empty(0))] * T
-            prev_rnn_embed_imu_hidden = torch.zeros(2, running_batch_size, self.args.embedding_size, device=self.args.device)
-            if self.args.imu_rnn == 'lstm':
-                rnn_embed_imu_hiddens[0] = (prev_rnn_embed_imu_hidden, prev_rnn_embed_imu_hidden)
-            elif self.args.imu_rnn == 'gru':
-                rnn_embed_imu_hiddens[0] = prev_rnn_embed_imu_hidden
-        
-        if use_pose_model:
-            pred_poses = [torch.empty(0)] * (T-1)
+
+        rnn_embed_imu_hiddens, \
+            observations_imu, \
+            observations_visual, \
+            fusion_lstm_hiddens, \
+            fusion_features, \
+            out_features, \
+            pred_poses = self.init_data(observations, poses, prev_belief)
         
         for t in range(T - 1):
             t_ = t - 1 # Use t_ to deal with different time indexing for observations
@@ -182,9 +209,13 @@ class SeqVINet(nn.Module):
                                                         observations_visual[t_ + 1],
                                                         observations[t_ + 1],
                                                         fusion_features[t],
-                                                        fusion_lstm_hiddens[t])
+                                                        fusion_lstm_hiddens[t],
+                                                        poses,
+                                                        pred_poses,
+                                                        t)
         
         hidden = [torch.stack(fusion_features, dim=0), torch.stack(out_features, dim=0)]
+        
         if use_pose_model:
             hidden += [torch.stack(pred_poses, dim=0)]
             if self.args.eval_uncertainty: hidden += [None]
