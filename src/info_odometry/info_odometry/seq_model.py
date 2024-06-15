@@ -137,9 +137,9 @@ class SeqVINet(nn.Module):
         out_features = self.fc_out_fusion(hidden)
         if use_pose_model:
             with torch.no_grad():
-                pred_poses[t_ + 1] = poses(out_features[t_ + 1])
+                pred_pose = poses(out_features)
 
-        return rnn_embed_imu_hiddens, fusion_lstm_hiddens, fusion_features, out_features, pred_poses
+        return rnn_embed_imu_hiddens, fusion_lstm_hiddens, fusion_features, out_features, pred_pose
 
     def init_data(self, observations, poses, prev_belief):
         if self.use_imu:
@@ -148,15 +148,15 @@ class SeqVINet(nn.Module):
 
         use_pose_model = True if type(poses) == PoseModel else False
 
-        fusion_hiddens, fusion_features, out_features = [torch.empty(0)] * T, [torch.empty(0)] * T, [torch.empty(0)] * (T-1)
+        fusion_hiddens, fusion_features, out_features = [torch.empty(0)] * self.T, [torch.empty(0)] * self.T, [torch.empty(0)] * (self.T-1)
         fusion_hiddens[0], fusion_features[0] = prev_belief, prev_belief
         if self.args.belief_rnn == 'lstm':
-            fusion_lstm_hiddens = fusion_hiddens = [torch.empty(0)] * T
+            fusion_lstm_hiddens = fusion_hiddens = [torch.empty(0)] * self.T
             fusion_lstm_hiddens[0] = (prev_belief.unsqueeze(0).repeat(2, 1, 1), prev_belief.unsqueeze(0).repeat(2, 1, 1))
         
         if self.use_imu:
             running_batch_size = prev_belief.size()[0]
-            rnn_embed_imu_hiddens = [(torch.empty(0))] * T
+            rnn_embed_imu_hiddens = [(torch.empty(0))] * self.T
             prev_rnn_embed_imu_hidden = torch.zeros(2, running_batch_size, self.args.embedding_size, device=self.args.device)
             if self.args.imu_rnn == 'lstm':
                 rnn_embed_imu_hiddens[0] = (prev_rnn_embed_imu_hidden, prev_rnn_embed_imu_hidden)
@@ -164,7 +164,7 @@ class SeqVINet(nn.Module):
                 rnn_embed_imu_hiddens[0] = prev_rnn_embed_imu_hidden
         
         if use_pose_model:
-            pred_poses = [torch.empty(0)] * (T-1)
+            pred_poses = [torch.empty(0)] * (self.T-1)
 
         return rnn_embed_imu_hiddens, observations_imu, observations_visual, fusion_lstm_hiddens, fusion_features, out_features, pred_poses
 
@@ -199,17 +199,16 @@ class SeqVINet(nn.Module):
         for t in range(T - 1):
             t_ = t - 1 # Use t_ to deal with different time indexing for observations
             
-            rnn_embed_imu_hiddens[t + 1], \
-                pred_poses[t_ + 1], \
-                fusion_lstm_hiddens[t + 1], \
-                fusion_features[t + 1], \
+            rnn_embed_imu_hiddens, \
+                fusion_lstm_hiddens, \
+                fusion_features, \
                 out_features[t_ + 1], \
-                pred_poses[t_ + 1] = self.execute_model(rnn_embed_imu_hiddens[t],
-                                                        observations_imu[t_ + 1],
-                                                        observations_visual[t_ + 1],
-                                                        observations[t_ + 1],
-                                                        fusion_features[t],
-                                                        fusion_lstm_hiddens[t],
+                pred_poses[t_ + 1] = self.execute_model(rnn_embed_imu_hiddens,
+                                                        observations_imu,
+                                                        observations_visual,
+                                                        observations,
+                                                        fusion_features,
+                                                        fusion_lstm_hiddens,
                                                         poses,
                                                         pred_poses,
                                                         t)
