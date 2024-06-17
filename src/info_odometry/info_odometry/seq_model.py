@@ -2,7 +2,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from info_odometry.info_model import PoseModel
-
+import collections
+import numpy as np
 
 class SeqVINet(nn.Module):
     def __init__(self, args, belief_size, state_size, hidden_size, embedding_size, use_imu, activation_function='relu'):
@@ -55,6 +56,12 @@ class SeqVINet(nn.Module):
             self.eps = 1e-10
 
         self.init_weights()
+
+        self.rnn_embed_imu_hiddens = collections.deque(maxlen=self.args.clip_length + 1)
+        self.fusion_lstm_hiddens = collections.deque(maxlen=self.args.clip_length + 1)
+        self.fusion_features = collections.deque(maxlen=self.args.clip_length + 1)
+        self.out_features = collections.deque(maxlen=self.args.clip_length)
+        self.pred_pose = collections.deque(maxlen=self.args.clip_length)
 
     def init_weights(self):
         """
@@ -142,10 +149,6 @@ class SeqVINet(nn.Module):
         return rnn_embed_imu_hiddens, fusion_lstm_hiddens, fusion_features, out_features, pred_pose
 
     def init_data(self, observations, poses, prev_belief):
-        if self.use_imu:
-            observations_visual = observations[0] # [batch, 1024]
-            observations_imu = observations[1] # [batch, 11, 6]
-
         use_pose_model = True if type(poses) == PoseModel else False
 
         fusion_hiddens, fusion_features, out_features = [torch.empty(0)] * self.T, [torch.empty(0)] * self.T, [torch.empty(0)] * (self.T-1)
@@ -166,8 +169,67 @@ class SeqVINet(nn.Module):
         if use_pose_model:
             pred_poses = [torch.empty(0)] * (self.T-1)
 
-        return rnn_embed_imu_hiddens, observations_imu, observations_visual, fusion_lstm_hiddens, fusion_features, out_features, pred_poses
+        return rnn_embed_imu_hiddens, observations, fusion_lstm_hiddens, fusion_features, out_features, pred_poses
 
+    def init_runtime(self, prev_belief):
+        self.rnn_embed_imu_hiddens = collections.deque(maxlen=self.args.clip_length)
+        self.fusion_lstm_hiddens = collections.deque(maxlen=self.args.clip_length)
+        self.fusion_features = collections.deque(maxlen=self.args.clip_length)
+        self.out_features = collections.deque(maxlen=self.args.clip_length)
+        self.pred_pose = collections.deque(maxlen=self.args.clip_length)
+
+        if self.args.belief_rnn == 'lstm':
+            self.fusion_lstm_hiddens.append((prev_belief.unsqueeze(0).repeat(2, 1, 1), prev_belief.unsqueeze(0).repeat(2, 1, 1)))
+        
+        if self.use_imu:
+            running_batch_size = prev_belief.size()[0]
+            prev_rnn_embed_imu_hidden = torch.zeros(2, running_batch_size, self.args.embedding_size, device=self.args.device)
+            if self.args.imu_rnn == 'lstm':
+                self.rnn_embed_imu_hiddens.append((prev_rnn_embed_imu_hidden, prev_rnn_embed_imu_hidden))
+            elif self.args.imu_rnn == 'gru':
+                self.rnn_embed_imu_hiddens.append(prev_rnn_embed_imu_hidden)
+
+    def step(self, poses, observations):
+        use_pose_model = True if type(poses) == PoseModel else False
+        
+        if self.use_imu:
+            observation_visual = observations[0] # [batch, 1024]
+            observation_imu = observations[1] # [batch, 11, 6]
+
+        print(np.array(self.rnn_embed_imu_hiddens[-1].cpu()).shape)
+        print(observation_imu.shape)
+        hidden, rnn_embed_imu_hiddens = self.rnn_embed_imu(observation_imu, self.rnn_embed_imu_hiddens[-1])
+        self.rnn_embed_imu_hiddens.append(rnn_embed_imu_hiddens)
+        fused_feat = torch.cat([observation_visual, hidden[:,-1,:]], dim=1)
+            
+        hidden = self.act_fn(self.dropout(self.fc_embed_sensors(fused_feat), 0.5))
+            
+        if self.args.belief_rnn == 'gru':
+            fusion_features = self.rnn_fusion(hidden, self.fusion_features[-1])
+            self.fusion_features.append(fusion_features)
+        elif self.args.belief_rnn == 'lstm':
+            hidden = hidden.unsqueeze(1)
+            fusion_feature_rnn, fusion_lstm_hiddens = self.rnn_fusion(hidden, self.fusion_lstm_hiddens[-1])
+            self.fusion_lstm_hiddens.append(fusion_lstm_hiddens)
+            fusion_features = fusion_feature_rnn.squeeze(1)
+            self.fusion_features.append(fusion_features)
+
+        hidden = self.act_fn(self.dropout(self.fc_embed_fusion(fusion_features), 0.6))
+        out_features = self.fc_out_fusion(hidden)
+        self.out_features.append(out_features)
+
+        if use_pose_model:
+            with torch.no_grad():
+                pred_pose = poses(out_features)
+                self.pred_pose.append(pred_pose)
+
+        hidden = [torch.stack(list(fusion_features), dim=0), torch.stack(list(out_features), dim=0)]
+        
+        if use_pose_model:
+            hidden += [torch.stack(list(self.pred_pose), dim=0)]
+            if self.args.eval_uncertainty: hidden += [None]
+        return hidden
+    
     # Operates over (previous) state, (previous) poses, (previous) belief, (previous) nonterminals (mask), and (current) observations
     # Diagram of expected inputs and outputs for T = 5 (-x- signifying beginning of output belief/state that gets sliced off):
     # t :  0  1  2  3  4  5

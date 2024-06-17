@@ -23,6 +23,8 @@ class OdometryModel:
          self.encoder) = construct_models(args)
 
         self.clip_length = args.clip_length
+        self.initialized = False
+
         if args.finetune_only_decoder:
             assert args.finetune
             print("=> only finetune pose_model, while fixing encoder and transition_model")
@@ -186,3 +188,42 @@ class OdometryModel:
 
         return beliefs, \
             pred_rel_poses
+
+    def set_eval(self):
+        self.pose_model.eval()
+        self.encoder.eval()
+        self.transition_model.eval()
+        if self.observation_model:
+            self.observation_model.eval()
+        if self.observation_imu_model:
+            self.observation_imu_model.eval()
+
+    def step_model(self, observations, x_imu_seqs, init_state, beliefs):
+        if not self.initialized:
+            self.set_eval()
+            self.transition_model.init_runtime(beliefs)
+        
+        pred_rel_poses = None
+        with torch.no_grad():
+            obs_size = observations.size()
+            observations = observations.view(obs_size[0], obs_size[1], -1)
+
+            if self.use_imu:
+                encode_observations = (bottle(self.encoder, (observations,)), x_imu_seqs)
+            elif self.args.imu_only:
+                encode_observations = x_imu_seqs
+            else:
+                encode_observations = bottle(self.encoder, (observations,))
+
+            # with one more returns: poses
+            beliefs, \
+                posterior_states, \
+                _ = self.transition_model.step(self.pose_model,
+                                               encode_observations)
+
+            if (len(posterior_states) == self.clip_length):
+                pred_rel_poses = bottle(self.pose_model, (posterior_states,))
+            else:
+                print('\nno')
+
+        return beliefs, pred_rel_poses

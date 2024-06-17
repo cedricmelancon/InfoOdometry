@@ -77,7 +77,6 @@ class P3atDeepvio(Node):
 
             self._camera_lock.release()
 
-        if len(self._camera_features) >= self._odometry_model.clip_length:
             tensor_camera_features = torch.from_numpy(np.array(list(self._camera_features), dtype=float)).type(torch.FloatTensor).to('cuda:0')
             tensor_camera_features = torch.squeeze(tensor_camera_features, 1)
 
@@ -99,7 +98,7 @@ class P3atDeepvio(Node):
             beliefs = torch.clone(self._beliefs[1, :])
 
         start_time = time.time()
-        self._beliefs, odometry = self._odometry_model.run_eval(
+        self._beliefs, odometry = self._odometry_model.step_model(
             tensor_camera_features,
             tensor_imu_seq,
             self._odometry_state,
@@ -107,38 +106,38 @@ class P3atDeepvio(Node):
         
         print("--- %s seconds ---" % (time.time() - start_time))
         
-        self._model_lock.release()
+        if odometry is not None:
+            self._model_lock.release()
 
-        odometry = odometry.cpu().numpy()[-1, 0]
-        odometry_msg = Odometry()
-        odometry_msg.header.stamp = current_stamp
-        odometry_msg.pose.pose.position.x = float(odometry[0])
-        odometry_msg.pose.pose.position.y = float(odometry[1])
-        odometry_msg.pose.pose.position.z = 0.0
-        odometry_msg.pose.pose.orientation.w = 0.0
-        odometry_msg.pose.pose.orientation.x = 0.0
-        odometry_msg.pose.pose.orientation.y = float(odometry[5])
-#        odometry_msg.pose.pose.orientation.z = odometry[6]
+            odometry = odometry.cpu().numpy()[-1, 0]
+            odometry_msg = Odometry()
+            odometry_msg.header.stamp = current_stamp
+            odometry_msg.pose.pose.position.x = float(odometry[0])
+            odometry_msg.pose.pose.position.y = float(odometry[1])
+            odometry_msg.pose.pose.position.z = 0.0
+            odometry_msg.pose.pose.orientation.w = 0.0
+            odometry_msg.pose.pose.orientation.x = 0.0
+            odometry_msg.pose.pose.orientation.y = float(odometry[5])
+    #        odometry_msg.pose.pose.orientation.z = odometry[6]
 
-        #if self._last_position is None:
-        #    odometry_msg.twist.linear.x = 0.0
-        #    odometry_msg.twist.linear.y = 0.0
-        #    odometry_msg.twist.linear.z = 0.0
+            #if self._last_position is None:
+            #    odometry_msg.twist.linear.x = 0.0
+            #    odometry_msg.twist.linear.y = 0.0
+            #    odometry_msg.twist.linear.z = 0.0
 
-        #    odometry_msg.twist.angular.x = 0.0
-        #    odometry_msg.twist.angular.y = 0.0
-        #    odometry_msg.twist.angular.z = 0.0
-        #else:
-        #    odometry_msg.twist.linear.x = 0.0
-        #    odometry_msg.twist.linear.y = 0.0
-        #    odometry_msg.twist.linear.z = 0.0
+            #    odometry_msg.twist.angular.x = 0.0
+            #    odometry_msg.twist.angular.y = 0.0
+            #    odometry_msg.twist.angular.z = 0.0
+            #else:
+            #    odometry_msg.twist.linear.x = 0.0
+            #    odometry_msg.twist.linear.y = 0.0
+            #    odometry_msg.twist.linear.z = 0.0
 
-        #    odometry_msg.twist.angular.x = 0.0
-        #    odometry_msg.twist.angular.y = 0.0
-        #    odometry_msg.twist.angular.z = 0.0
+            #    odometry_msg.twist.angular.x = 0.0
+            #    odometry_msg.twist.angular.y = 0.0
+            #    odometry_msg.twist.angular.z = 0.0
 
-        self._publisher.publish(odometry_msg)
-
+            self._publisher.publish(odometry_msg)
 
     def camera_callback(self, msg):
         self._imu_lock.acquire()
