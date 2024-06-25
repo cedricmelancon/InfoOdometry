@@ -20,8 +20,7 @@ class SeqVINet(nn.Module):
         self.args = args
         self.use_imu = use_imu
         self.T = self.args.clip_length + 1
-        self.use_soft = args.soft
-        self.use_hard = args.hard
+        
         self.embedding_size = embedding_size
         self.act_fn = getattr(F, activation_function)
         self.dropout = getattr(F, 'dropout')
@@ -39,27 +38,12 @@ class SeqVINet(nn.Module):
             self.rnn_fusion = nn.GRUCell(belief_size, belief_size)
         self.fc_embed_fusion = nn.Linear(belief_size, hidden_size)
         self.fc_out_fusion = nn.Linear(hidden_size, state_size)
-        
-        if self.use_soft and self.use_imu:
-            self.sigmoid = nn.Sigmoid()
-            self.soft_fc_img = nn.Linear(2 * embedding_size, embedding_size)
-            self.soft_fc_imu = nn.Linear(2 * embedding_size, embedding_size)
-        
-        if self.use_hard and self.use_imu:
-            self.sigmoid = nn.Sigmoid()
-            self.hard_fc_img = nn.Linear(2 * embedding_size, embedding_size)
-            self.hard_fc_imu = nn.Linear(2 * embedding_size, embedding_size)
-            if args.hard_mode == 'onehot':
-                self.onehot_hard = True 
-            elif args.hard_mode == 'gumbel_soft':
-                self.onehot_hard = False
-            self.eps = 1e-10
 
         self.init_weights()
 
         self.rnn_embed_imu_hiddens = collections.deque(maxlen=self.args.clip_length + 1)
         self.fusion_lstm_hiddens = collections.deque(maxlen=self.args.clip_length + 1)
-        self.fusion_features = collections.deque(maxlen=self.args.clip_length + 1)
+        
         self.out_features = collections.deque(maxlen=self.args.clip_length)
         self.pred_pose = collections.deque(maxlen=self.args.clip_length)
 
@@ -121,7 +105,6 @@ class SeqVINet(nn.Module):
                       fusion_features, 
                       fusion_lstm_hiddens,
                       poses,
-                      pred_poses,
                       t):
         use_pose_model = True if type(poses) == PoseModel else False
         t_ = t - 1 # Use t_ to deal with different time indexing for observations
@@ -142,13 +125,10 @@ class SeqVINet(nn.Module):
             fusion_features[t + 1] = fusion_feature_rnn.squeeze(1)
         hidden = self.act_fn(self.dropout(self.fc_embed_fusion(fusion_features[t + 1]), 0.6))
         out_features = self.fc_out_fusion(hidden)
-        if use_pose_model:
-            with torch.no_grad():
-                pred_pose = poses(out_features)
 
-        return rnn_embed_imu_hiddens, fusion_lstm_hiddens, fusion_features, out_features, pred_pose
+        return rnn_embed_imu_hiddens, fusion_lstm_hiddens, fusion_features, out_features
 
-    def init_data(self, observations, poses, prev_belief):
+    def init_data(self, poses, prev_belief):
         use_pose_model = True if type(poses) == PoseModel else False
 
         fusion_hiddens, fusion_features, out_features = [torch.empty(0)] * self.T, [torch.empty(0)] * self.T, [torch.empty(0)] * (self.T-1)
@@ -165,71 +145,9 @@ class SeqVINet(nn.Module):
                 rnn_embed_imu_hiddens[0] = (prev_rnn_embed_imu_hidden, prev_rnn_embed_imu_hidden)
             elif self.args.imu_rnn == 'gru':
                 rnn_embed_imu_hiddens[0] = prev_rnn_embed_imu_hidden
-        
-        if use_pose_model:
-            pred_poses = [torch.empty(0)] * (self.T-1)
 
-        return rnn_embed_imu_hiddens, observations, fusion_lstm_hiddens, fusion_features, out_features, pred_poses
+        return rnn_embed_imu_hiddens, fusion_lstm_hiddens, fusion_features, out_features
 
-    def init_runtime(self, prev_belief):
-        self.rnn_embed_imu_hiddens = collections.deque(maxlen=self.args.clip_length)
-        self.fusion_lstm_hiddens = collections.deque(maxlen=self.args.clip_length)
-        self.fusion_features = collections.deque(maxlen=self.args.clip_length)
-        self.out_features = collections.deque(maxlen=self.args.clip_length)
-        self.pred_pose = collections.deque(maxlen=self.args.clip_length)
-
-        if self.args.belief_rnn == 'lstm':
-            self.fusion_lstm_hiddens.append((prev_belief.unsqueeze(0).repeat(2, 1, 1), prev_belief.unsqueeze(0).repeat(2, 1, 1)))
-        
-        if self.use_imu:
-            running_batch_size = prev_belief.size()[0]
-            prev_rnn_embed_imu_hidden = torch.zeros(2, running_batch_size, self.args.embedding_size, device=self.args.device)
-            if self.args.imu_rnn == 'lstm':
-                self.rnn_embed_imu_hiddens.append((prev_rnn_embed_imu_hidden, prev_rnn_embed_imu_hidden))
-            elif self.args.imu_rnn == 'gru':
-                self.rnn_embed_imu_hiddens.append(prev_rnn_embed_imu_hidden)
-
-    def step(self, poses, observations):
-        use_pose_model = True if type(poses) == PoseModel else False
-        
-        if self.use_imu:
-            observation_visual = observations[0] # [batch, 1024]
-            observation_imu = observations[1] # [batch, 11, 6]
-
-        print(np.array(self.rnn_embed_imu_hiddens[-1].cpu()).shape)
-        print(observation_imu.shape)
-        hidden, rnn_embed_imu_hiddens = self.rnn_embed_imu(observation_imu, self.rnn_embed_imu_hiddens[-1])
-        self.rnn_embed_imu_hiddens.append(rnn_embed_imu_hiddens)
-        fused_feat = torch.cat([observation_visual, hidden[:,-1,:]], dim=1)
-            
-        hidden = self.act_fn(self.dropout(self.fc_embed_sensors(fused_feat), 0.5))
-            
-        if self.args.belief_rnn == 'gru':
-            fusion_features = self.rnn_fusion(hidden, self.fusion_features[-1])
-            self.fusion_features.append(fusion_features)
-        elif self.args.belief_rnn == 'lstm':
-            hidden = hidden.unsqueeze(1)
-            fusion_feature_rnn, fusion_lstm_hiddens = self.rnn_fusion(hidden, self.fusion_lstm_hiddens[-1])
-            self.fusion_lstm_hiddens.append(fusion_lstm_hiddens)
-            fusion_features = fusion_feature_rnn.squeeze(1)
-            self.fusion_features.append(fusion_features)
-
-        hidden = self.act_fn(self.dropout(self.fc_embed_fusion(fusion_features), 0.6))
-        out_features = self.fc_out_fusion(hidden)
-        self.out_features.append(out_features)
-
-        if use_pose_model:
-            with torch.no_grad():
-                pred_pose = poses(out_features)
-                self.pred_pose.append(pred_pose)
-
-        hidden = [torch.stack(list(fusion_features), dim=0), torch.stack(list(out_features), dim=0)]
-        
-        if use_pose_model:
-            hidden += [torch.stack(list(self.pred_pose), dim=0)]
-            if self.args.eval_uncertainty: hidden += [None]
-        return hidden
-    
     # Operates over (previous) state, (previous) poses, (previous) belief, (previous) nonterminals (mask), and (current) observations
     # Diagram of expected inputs and outputs for T = 5 (-x- signifying beginning of output belief/state that gets sliced off):
     # t :  0  1  2  3  4  5
@@ -251,12 +169,10 @@ class SeqVINet(nn.Module):
         T = self.args.clip_length + 1
 
         rnn_embed_imu_hiddens, \
-            observations_imu, \
-            observations_visual, \
             fusion_lstm_hiddens, \
             fusion_features, \
             out_features, \
-            pred_poses = self.init_data(observations, poses, prev_belief)
+            pred_poses = self.init_data(poses, prev_belief)
         
         for t in range(T - 1):
             t_ = t - 1 # Use t_ to deal with different time indexing for observations
@@ -266,8 +182,8 @@ class SeqVINet(nn.Module):
                 fusion_features, \
                 out_features[t_ + 1], \
                 pred_poses[t_ + 1] = self.execute_model(rnn_embed_imu_hiddens,
-                                                        observations_imu,
-                                                        observations_visual,
+                                                        observations[1],
+                                                        observations[0],
                                                         observations,
                                                         fusion_features,
                                                         fusion_lstm_hiddens,
@@ -281,39 +197,3 @@ class SeqVINet(nn.Module):
             hidden += [torch.stack(pred_poses, dim=0)]
             if self.args.eval_uncertainty: hidden += [None]
         return hidden
-                
-                
-    def gumbel_sigmoid(self, probs, tau):
-        """
-        input: 
-        -> probs: [batch, feat_size]: each element is the probability to be 1
-        return: 
-        -> gumbel_dist: [batch, feat_size, 2]
-            -> if self.onehot_hard == True:  one_hot vector (as in SelectiveFusion)
-            -> if self.onehot_hard == False: gumbel softmax approx
-        """
-        log_probs = torch.stack((torch.log(probs + self.eps), torch.log(1 - probs + self.eps)), dim=-1) # [batch, feat_size, 2]
-        gumbel = torch.rand_like(log_probs).to(device=self.args.device)
-        gumbel = -torch.log(-torch.log(gumbel + self.eps) + self.eps)
-        log_probs = log_probs + gumbel # [batch, feat_size, 2]
-        gumbel_dist = F.softmax(log_probs / tau, dim=-1) # [batch, feat_size, 2]
-        if self.onehot_hard:
-            _shape = gumbel_dist.shape
-            _, ind = gumbel_dist.max(dim=-1)
-            gumbel_hard = torch.zeros_like(gumbel_dist).view(-1, _shape[-1])
-            gumbel_hard.scatter_(dim=-1, index=ind.view(-1,1), value=1.0)
-            gumbel_hard = gumbel_hard.view(*_shape)
-            gumbel_dist = (gumbel_hard - gumbel_dist).detach() + gumbel_dist
-        return gumbel_dist
-
-                
-                
-                
-        
-        
-        
-        
-        
-        
-        
-        

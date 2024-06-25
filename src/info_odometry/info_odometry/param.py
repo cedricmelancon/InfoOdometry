@@ -146,24 +146,24 @@ class Param:
                                  choices=["kitti", "mit", "euroc", "vkitti2"],
                                  help='euroc, kitti (determine base_dir, train/eval_sequences')
         self.parser.add_argument('--base_dir', type=str, default='/data', help='should not be specified')
-        #self.parser.add_argument('--train_sequences', type=str,
-        #                         default='2012-04-03-07-56-24')
-        #self.parser.add_argument('--train_sequences_gt', type=str,
-        #                         default='2012-04-03-07-56-24_part1_floor2',
-        #                         help='separated by , ')
-
         self.parser.add_argument('--train_sequences', type=str,
-                                 default='2012-01-25-12-14-25,2012-04-03-07-56-24,2012-04-03-07-56-24,'
-                                         '2012-05-02-06-23-02,2012-01-28-12-38-24,2012-01-28-12-38-24,'
-                                         '2012-01-27-07-37-01,2012-01-27-07-37-01,2012-02-02-10-44-08',
-                                 help='separated by , ')
+                                 default='2012-04-03-07-56-24')
         self.parser.add_argument('--train_sequences_gt', type=str,
-                                 default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part4_floor2,'
-                                         '2012-04-03-07-56-24_part1_floor2,2012-05-02-06-23-02_part2_floor2,'
-                                         '2012-01-28-12-38-24_part1_floor2,2012-01-28-12-38-24_part4_floor2,'
-                                         '2012-01-27-07-37-01_part1_floor2,2012-01-27-07-37-01_part3_floor2,'
-                                         '2012-02-02-10-44-08_part1_floor2',
+                                 default='2012-04-03-07-56-24_part1_floor2',
                                  help='separated by , ')
+
+        #self.parser.add_argument('--train_sequences', type=str,
+        #                         default='2012-01-25-12-14-25,2012-04-03-07-56-24,2012-04-03-07-56-24,'
+        #                                 '2012-05-02-06-23-02,2012-01-28-12-38-24,2012-01-28-12-38-24,'
+        #                                 '2012-01-27-07-37-01,2012-01-27-07-37-01,2012-02-02-10-44-08',
+        #                         help='separated by , ')
+        #self.parser.add_argument('--train_sequences_gt', type=str,
+        #                         default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part4_floor2,'
+        #                                 '2012-04-03-07-56-24_part1_floor2,2012-05-02-06-23-02_part2_floor2,'
+        #                                 '2012-01-28-12-38-24_part1_floor2,2012-01-28-12-38-24_part4_floor2,'
+        #                                 '2012-01-27-07-37-01_part1_floor2,2012-01-27-07-37-01_part3_floor2,'
+        #                                 '2012-02-02-10-44-08_part1_floor2',
+        #                         help='separated by , ')
 
         self.parser.add_argument('--eval_sequences', type=str, default='2012-04-03-07-56-24',
                                  help='separated by , ')

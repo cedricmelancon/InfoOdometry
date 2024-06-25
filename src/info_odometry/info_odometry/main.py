@@ -130,67 +130,67 @@ def train(args):
         
         batch_timer = SequenceTimer()
         last_batch_index = len(train_clips) - 1
-        for batch_idx, batch_data in tqdm(enumerate(train_clips)):
-            if args.debug and batch_idx >= 10:
-                break
+        # for batch_idx, batch_data in tqdm(enumerate(train_clips)):
+            # if args.debug and batch_idx >= 10:
+            #     break
 
-            # x_img_list:                length-5 list with component [batch, 3, 2, H, W]
-            # x_imu_list:                length-5 list with component [batch, 11, 6]
-            # x_last_rel_pose_list:      length-5 list with component [batch, 6]    # se3 or t_euler (--t_euler_loss)
-            # y_rel_pose_list:           length-5 list with component [batch, 6]    # se3 or t_euler (--t_euler_loss)
-            # y_last_global_pose_list:   length-5 list with component [batch, 7]    # t_quaternion
-            # y_global_pose_list:        length-5 list with component [batch, 7]    # t_quaternion
-            x_img_list, x_imu_list, x_last_rel_pose_list, y_rel_pose_list, y_last_global_pose_list, y_global_pose_list, _, _ = batch_data
+            # # x_img_list:                length-5 list with component [batch, 3, 2, H, W]
+            # # x_imu_list:                length-5 list with component [batch, 11, 6]
+            # # x_last_rel_pose_list:      length-5 list with component [batch, 6]    # se3 or t_euler (--t_euler_loss)
+            # # y_rel_pose_list:           length-5 list with component [batch, 6]    # se3 or t_euler (--t_euler_loss)
+            # # y_last_global_pose_list:   length-5 list with component [batch, 7]    # t_quaternion
+            # # y_global_pose_list:        length-5 list with component [batch, 7]    # t_quaternion
+            # x_img_list, x_imu_list, x_last_rel_pose_list, y_rel_pose_list, y_last_global_pose_list, y_global_pose_list, _, _ = batch_data
             
-            x_img_pairs = torch.stack(x_img_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 3, 2, H, W]
-            y_rel_poses = torch.stack(y_rel_pose_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 6]
+            # x_img_pairs = torch.stack(x_img_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 3, 2, H, W]
+            # y_rel_poses = torch.stack(y_rel_pose_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 6]
 
-            x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 11, 6]
-            running_batch_size = x_img_pairs.size()[1] # might be different for the last batch
+            # x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 11, 6]
+            # running_batch_size = x_img_pairs.size()[1] # might be different for the last batch
 
-            # transitions start at time t = 0 
-            # create initial belief and state for time t = 0
-            init_state = torch.zeros(running_batch_size, args.state_size, device=args.device)
-            init_belief = torch.rand(running_batch_size, args.belief_size, device=args.device)
+            # # transitions start at time t = 0 
+            # # create initial belief and state for time t = 0
+            # init_state = torch.zeros(running_batch_size, args.state_size, device=args.device)
+            # init_belief = torch.rand(running_batch_size, args.belief_size, device=args.device)
 
-            beliefs, \
-                prior_states, \
-                prior_means, \
-                prior_std_devs, \
-                posterior_states, \
-                posterior_means, \
-                posterior_std_devs, \
-                pred_rel_poses = odometry_model.run_train(x_img_pairs,
-                                                          x_imu_seqs,
-                                                          init_state,
-                                                          y_rel_poses,
-                                                          init_belief)
+            # beliefs, \
+            #     prior_states, \
+            #     prior_means, \
+            #     prior_std_devs, \
+            #     posterior_states, \
+            #     posterior_means, \
+            #     posterior_std_devs, \
+            #     pred_rel_poses = odometry_model.run_train(x_img_pairs,
+            #                                               x_imu_seqs,
+            #                                               init_state,
+            #                                               y_rel_poses,
+            #                                               init_belief)
 
-            pose_trans_loss_x = F.mse_loss(pred_rel_poses[:, :, :1] * args.translation_weight,
-                                           y_rel_poses[:, :, :1] * args.translation_weight,
-                                           reduction='none').sum(dim=2).mean(dim=(0, 1))
-            pose_trans_loss_y = F.mse_loss(pred_rel_poses[:, :, 1:2] * args.translation_weight,
-                                           y_rel_poses[:, :, 1:2] * args.translation_weight,
-                                           reduction='none').sum(dim=2).mean(dim=(0, 1))
-            pose_rot_loss = F.mse_loss(pred_rel_poses[:, :, -1:] * args.rotation_weight,
-                                       y_rel_poses[:, :, -1:] * args.rotation_weight,
-                                       reduction='none').sum(dim=2).mean(dim=(0, 1))
+            # pose_trans_loss_x = F.mse_loss(pred_rel_poses[:, :, :1] * args.translation_weight,
+            #                                y_rel_poses[:, :, :1] * args.translation_weight,
+            #                                reduction='none').sum(dim=2).mean(dim=(0, 1))
+            # pose_trans_loss_y = F.mse_loss(pred_rel_poses[:, :, 1:2] * args.translation_weight,
+            #                                y_rel_poses[:, :, 1:2] * args.translation_weight,
+            #                                reduction='none').sum(dim=2).mean(dim=(0, 1))
+            # pose_rot_loss = F.mse_loss(pred_rel_poses[:, :, -1:] * args.rotation_weight,
+            #                            y_rel_poses[:, :, -1:] * args.rotation_weight,
+            #                            reduction='none').sum(dim=2).mean(dim=(0, 1))
 
-            total_loss = pose_trans_loss_x + pose_trans_loss_y + pose_rot_loss
+            # total_loss = pose_trans_loss_x + pose_trans_loss_y + pose_rot_loss
 
-            optimizer.zero_grad()
-            total_loss.backward()
-            nn.utils.clip_grad_norm(odometry_model.param_list, args.grad_clip_norm, norm_type=2)
-            optimizer.step()  # if using ScheduledOptim -> will also update learning rate
+            # optimizer.zero_grad()
+            # total_loss.backward()
+            # nn.utils.clip_grad_norm(odometry_model.param_list, args.grad_clip_norm, norm_type=2)
+            # optimizer.step()  # if using ScheduledOptim -> will also update learning rate
 
-            writer.add_scalar('train/total_loss', total_loss.item(), curr_iter)
-            writer.add_scalar('train/pose_trans_loss_x', pose_trans_loss_x.item(), curr_iter)
-            writer.add_scalar('train/pose_trans_loss_y', pose_trans_loss_y.item(), curr_iter)
-            writer.add_scalar('train/pose_rot_loss', pose_rot_loss.item(), curr_iter)
-            writer.add_scalar('train/learning_rate', get_lr(optimizer), curr_iter)
-            curr_iter += 1
+            # writer.add_scalar('train/total_loss', total_loss.item(), curr_iter)
+            # writer.add_scalar('train/pose_trans_loss_x', pose_trans_loss_x.item(), curr_iter)
+            # writer.add_scalar('train/pose_trans_loss_y', pose_trans_loss_y.item(), curr_iter)
+            # writer.add_scalar('train/pose_rot_loss', pose_rot_loss.item(), curr_iter)
+            # writer.add_scalar('train/learning_rate', get_lr(optimizer), curr_iter)
+            # curr_iter += 1
 
-            batch_timer.tictoc()
+            # batch_timer.tictoc()
 
         # evaluate the model after training each sequence
         # if gt_last_pose is False, then zero_first must be True
@@ -243,12 +243,6 @@ def train(args):
                 observations = odometry_model.eval_flownet_model(x_img_pairs)
 
                 beliefs, \
-                    prior_states, \
-                    prior_means, \
-                    prior_std_devs, \
-                    posterior_states, \
-                    posterior_means, \
-                    posterior_std_devs, \
                     pred_rel_poses = odometry_model.run_eval(observations, x_imu_seqs, init_state, beliefs)
 
                 pose_trans_loss_x = F.mse_loss(pred_rel_poses[:, :, :1] * args.translation_weight,

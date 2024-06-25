@@ -25,6 +25,8 @@ class OdometryModel:
         self.clip_length = args.clip_length
         self.initialized = False
 
+        self.beliefs = torch.rand(1, self.args.belief_size, device=self.args.device)
+
         if args.finetune_only_decoder:
             assert args.finetune
             print("=> only finetune pose_model, while fixing encoder and transition_model")
@@ -177,17 +179,15 @@ class OdometryModel:
                 encode_observations = bottle(self.encoder, (observations,))
 
             # with one more returns: poses
-            beliefs, \
+            self.beliefs, \
                 posterior_states, \
-                _ = self.transition_model(prev_state=init_state,  # not used if not use_info
+                _ = self.transition_model(prev_state=beliefs,  # not used if not use_info
                                           poses=self.pose_model,
                                           prev_belief=beliefs,
                                           observations=encode_observations)
-
             pred_rel_poses = bottle(self.pose_model, (posterior_states,))
 
-        return beliefs, \
-            pred_rel_poses
+        return pred_rel_poses
 
     def set_eval(self):
         self.pose_model.eval()
@@ -198,32 +198,38 @@ class OdometryModel:
         if self.observation_imu_model:
             self.observation_imu_model.eval()
 
-    def step_model(self, observations, x_imu_seqs, init_state, beliefs):
+    def step_model(self, observations, x_imu_seqs, init_state):
         if not self.initialized:
             self.set_eval()
-            self.transition_model.init_runtime(beliefs)
+            self.rnn_embed_imu_hiddens, \
+                self.fusion_lstm_hiddens, \
+                self.fusion_features, \
+                self.out_features = self.transition_model.init_data(self.pose_model, torch.rand(1, self.args.belief_size, device=self.args.device))
+            self.index = 0
+            self.initialized = True
         
         pred_rel_poses = None
         with torch.no_grad():
             obs_size = observations.size()
             observations = observations.view(obs_size[0], obs_size[1], -1)
+            
+            encode_observations = (self.encoder(observations), x_imu_seqs)
 
-            if self.use_imu:
-                encode_observations = (bottle(self.encoder, (observations,)), x_imu_seqs)
-            elif self.args.imu_only:
-                encode_observations = x_imu_seqs
-            else:
-                encode_observations = bottle(self.encoder, (observations,))
+            self.rnn_embed_imu_hiddens, \
+                self.fusion_lstm_hiddens, \
+                self.fusion_features, \
+                self.out_features[self.index] = self.transition_model.execute_model(self.rnn_embed_imu_hiddens,
+                                                        encode_observations[1],
+                                                        encode_observations[0],
+                                                        encode_observations,
+                                                        self.fusion_features,
+                                                        self.fusion_lstm_hiddens,
+                                                        self.pose_model,
+                                                        self.index)
 
-            # with one more returns: poses
-            beliefs, \
-                posterior_states, \
-                _ = self.transition_model.step(self.pose_model,
-                                               encode_observations)
+            if self.index == self.clip_length - 1:
+                pred_rel_poses = self.pose_model(self.out_features[self.index])
 
-            if (len(posterior_states) == self.clip_length):
-                pred_rel_poses = bottle(self.pose_model, (posterior_states,))
-            else:
-                print('\nno')
-
-        return beliefs, pred_rel_poses
+        if self.index < self.clip_length - 1:
+            self.index += 1
+        return pred_rel_poses
