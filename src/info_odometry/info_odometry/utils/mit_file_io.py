@@ -1,8 +1,5 @@
 import csv
-import math
-import numpy as np
 import pandas as pd
-from scipy.spatial.transform import Rotation as R
 import os
 import glob
 from pathlib import Path

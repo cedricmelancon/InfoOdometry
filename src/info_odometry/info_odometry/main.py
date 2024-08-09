@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
 import torch.optim as optim
-from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tensorboardX import SummaryWriter
 import csv
 from timeit import default_timer as timer
@@ -11,15 +11,13 @@ from tqdm import tqdm
 
 import numpy as np
 
-from utils.tools import SequenceTimer
-from utils.tools import RunningAverager
-from utils.tools import save_model
-from utils.tools import eval_rel_error
-from utils.tools import get_absolute_pose
-from utils.tools import eval_global_error
-from utils.tools import get_lr
-from utils.tools import factor_lr_schedule
-from utils.tools import ScheduledOptim
+from utils import SequenceTimer
+from utils import RunningAverager
+from utils import ScheduledOptim
+
+from utils.tools import save_model, get_lr
+from utils.odom_model import eval_rel_error, eval_global_error
+from utils.transforms import get_absolute_pose
 
 from param import Param
 from odometry_model import OdometryModel
@@ -41,7 +39,7 @@ def train(args):
     """
     args: see param.py for details
     """
-    # torch.cuda.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
     epoch = args.epoch
     writer = SummaryWriter(log_dir='{}{}/'.format(args.tb_dir, args.exp_name))
     eval_csvfile = open(f'{args.tb_dir}/{args.exp_name}/test_data.csv', 'w', newline='')
@@ -68,14 +66,7 @@ def train(args):
         else:
             raise ValueError('optimizer {} is currently not supported'.format(args.optimizer))
 
-    #if not args.finetune and 'optimizer' in model.model_dicts:
-        # for vkitti2 we are finetuning v.s. fot kitti and euroc we are resuming
-        # NOTE: for --finetune we will our own optimizer setting
-        #optimizer.load_state_dict(model.model_dicts["optimizer"], strict=True)
-
     if not args.lr_warmup:
-        #lmbda = lambda epoch: factor_lr_schedule(epoch, divide_epochs=args.lr_schedule, lr_factors=args.lr_factor)
-        #scheduler = LambdaLR(optimizer, lr_lambda=lmbda)
         scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.75, patience=10, threshold_mode='abs')
 
     # initialize datasets and data loaders
@@ -99,98 +90,65 @@ def train(args):
         sample_size_ratio=1.
     )
 
-    best_epoch = {'sqrt_then_avg': 0} # 'avg_then_sqrt': 0
-    best_eval = {'total_loss': 100000.0} # 'avg_then_sqrt': 1.0
-    best_metrics = {'total_loss': None} # 'avg_then_sqrt': None
-    eval_msgs = []
+    best_epoch = {'sqrt_then_avg': 0}  # 'avg_then_sqrt': 0
+    best_eval = {'total_loss': 100000.0}  # 'avg_then_sqrt': 1.0
+    best_metrics = {'total_loss': None}  # 'avg_then_sqrt': None
 
     odometry_model = OdometryModel(args)
 
-    # gumbel temperature for hard deepvio
-    # if args.hard:
-    #     start_tau = args.gumbel_tau_start # default 1.0
-    #     final_tau = args.gumbel_tau_final # default 0.5
-    #     anneal_epochs = int(epoch * args.gumbel_tau_epoch_ratio)
-    #     step_tau = (start_tau - final_tau) / (anneal_epochs - 1)
-    #     gumbel_tau = start_tau + step_tau
-    
     # starting training (the same epochs for each sequence)
     curr_iter = 0
     curr_eval_iter = 0
+
     for epoch_idx in range(epoch):
         print('-----------------------------------------')
         print('starting epoch {}...'.format(epoch_idx))
         print('learning rate: {:.6f}'.format(get_lr(optimizer)))
         writer.add_scalar('general/learning_rate', get_lr(optimizer), epoch_idx)
 
-        # update gumbel temperature if using hard deepvio
-        # if args.hard:
-        #     if epoch_idx < anneal_epochs: gumbel_tau -= step_tau
-        #     print('-> gumbel temperature: {}'.format(gumbel_tau))
-        
         batch_timer = SequenceTimer()
-        last_batch_index = len(train_clips) - 1
-        # for batch_idx, batch_data in tqdm(enumerate(train_clips)):
-            # if args.debug and batch_idx >= 10:
-            #     break
 
-            # # x_img_list:                length-5 list with component [batch, 3, 2, H, W]
-            # # x_imu_list:                length-5 list with component [batch, 11, 6]
-            # # x_last_rel_pose_list:      length-5 list with component [batch, 6]    # se3 or t_euler (--t_euler_loss)
-            # # y_rel_pose_list:           length-5 list with component [batch, 6]    # se3 or t_euler (--t_euler_loss)
-            # # y_last_global_pose_list:   length-5 list with component [batch, 7]    # t_quaternion
-            # # y_global_pose_list:        length-5 list with component [batch, 7]    # t_quaternion
-            # x_img_list, x_imu_list, x_last_rel_pose_list, y_rel_pose_list, y_last_global_pose_list, y_global_pose_list, _, _ = batch_data
+        for batch_idx, batch_data in tqdm(enumerate(train_clips)):
+            # x_img_list:                length-5 list with component [batch, 3, 2, H, W]
+            # x_imu_list:                length-5 list with component [batch, 11, 6]
+            # x_last_rel_pose_list:      length-5 list with component [batch, 6]    # se3 or t_euler (--t_euler_loss)
+            # y_rel_pose_list:           length-5 list with component [batch, 6]    # se3 or t_euler (--t_euler_loss)
+            # y_last_global_pose_list:   length-5 list with component [batch, 7]    # t_quaternion
+            # y_global_pose_list:        length-5 list with component [batch, 7]    # t_quaternion
+            (x_img_list, x_imu_list,
+             x_last_rel_pose_list, y_rel_pose_list,
+             y_last_global_pose_list, y_global_pose_list, _, _) = batch_data
             
-            # x_img_pairs = torch.stack(x_img_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 3, 2, H, W]
-            # y_rel_poses = torch.stack(y_rel_pose_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 6]
+            x_img_pairs = torch.stack(x_img_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 3, 2, H, W]
+            y_rel_poses = torch.stack(y_rel_pose_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 6]
 
-            # x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 11, 6]
-            # running_batch_size = x_img_pairs.size()[1] # might be different for the last batch
+            x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=args.device) # [time, batch, 11, 6]
+            running_batch_size = x_img_pairs.size()[1] # might be different for the last batch
 
-            # # transitions start at time t = 0 
-            # # create initial belief and state for time t = 0
-            # init_state = torch.zeros(running_batch_size, args.state_size, device=args.device)
-            # init_belief = torch.rand(running_batch_size, args.belief_size, device=args.device)
+            # transitions start at time t = 0
+            # create initial belief and state for time t = 0
+            init_belief = torch.rand(running_batch_size, args.belief_size, device=args.device)
 
-            # beliefs, \
-            #     prior_states, \
-            #     prior_means, \
-            #     prior_std_devs, \
-            #     posterior_states, \
-            #     posterior_means, \
-            #     posterior_std_devs, \
-            #     pred_rel_poses = odometry_model.run_train(x_img_pairs,
-            #                                               x_imu_seqs,
-            #                                               init_state,
-            #                                               y_rel_poses,
-            #                                               init_belief)
+            beliefs, pred_rel_poses = odometry_model.run_train(x_img_pairs,
+                                                               x_imu_seqs,
+                                                               init_belief)
 
-            # pose_trans_loss_x = F.mse_loss(pred_rel_poses[:, :, :1] * args.translation_weight,
-            #                                y_rel_poses[:, :, :1] * args.translation_weight,
-            #                                reduction='none').sum(dim=2).mean(dim=(0, 1))
-            # pose_trans_loss_y = F.mse_loss(pred_rel_poses[:, :, 1:2] * args.translation_weight,
-            #                                y_rel_poses[:, :, 1:2] * args.translation_weight,
-            #                                reduction='none').sum(dim=2).mean(dim=(0, 1))
-            # pose_rot_loss = F.mse_loss(pred_rel_poses[:, :, -1:] * args.rotation_weight,
-            #                            y_rel_poses[:, :, -1:] * args.rotation_weight,
-            #                            reduction='none').sum(dim=2).mean(dim=(0, 1))
+            (pose_rot_loss, pose_trans_loss_x,
+             pose_trans_loss_y, total_loss) = compute_loss(args, pred_rel_poses, y_rel_poses)
 
-            # total_loss = pose_trans_loss_x + pose_trans_loss_y + pose_rot_loss
+            optimizer.zero_grad()
+            total_loss.backward()
+            nn.utils.clip_grad_norm(odometry_model.param_list, args.grad_clip_norm, norm_type=2)
+            optimizer.step()  # if using ScheduledOptim -> will also update learning rate
 
-            # optimizer.zero_grad()
-            # total_loss.backward()
-            # nn.utils.clip_grad_norm(odometry_model.param_list, args.grad_clip_norm, norm_type=2)
-            # optimizer.step()  # if using ScheduledOptim -> will also update learning rate
+            writer.add_scalar('train/total_loss', total_loss.item(), curr_iter)
+            writer.add_scalar('train/pose_trans_loss_x', pose_trans_loss_x.item(), curr_iter)
+            writer.add_scalar('train/pose_trans_loss_y', pose_trans_loss_y.item(), curr_iter)
+            writer.add_scalar('train/pose_rot_loss', pose_rot_loss.item(), curr_iter)
+            writer.add_scalar('train/learning_rate', get_lr(optimizer), curr_iter)
+            curr_iter += 1
 
-            # writer.add_scalar('train/total_loss', total_loss.item(), curr_iter)
-            # writer.add_scalar('train/pose_trans_loss_x', pose_trans_loss_x.item(), curr_iter)
-            # writer.add_scalar('train/pose_trans_loss_y', pose_trans_loss_y.item(), curr_iter)
-            # writer.add_scalar('train/pose_rot_loss', pose_rot_loss.item(), curr_iter)
-            # writer.add_scalar('train/learning_rate', get_lr(optimizer), curr_iter)
-            # curr_iter += 1
-
-            # batch_timer.tictoc()
+            batch_timer.tictoc()
 
         # evaluate the model after training each sequence
         # if gt_last_pose is False, then zero_first must be True
@@ -198,7 +156,7 @@ def train(args):
             # move eval directly here
             print('----------------------------------------')
             batch_timer = SequenceTimer()
-            last_batch_index = len(eval_clips) - 1
+
             loss_avg = dict()
             loss_list = ['total_loss', 'pose_trans_loss_x', 'pose_trans_loss_y', 'pose_rot_loss']
             last_pose = None
@@ -242,20 +200,10 @@ def train(args):
 
                 observations = odometry_model.eval_flownet_model(x_img_pairs)
 
-                beliefs, \
-                    pred_rel_poses = odometry_model.run_eval(observations, x_imu_seqs, init_state, beliefs)
+                beliefs, pred_rel_poses = odometry_model.run_eval(observations, x_imu_seqs, beliefs)
 
-                pose_trans_loss_x = F.mse_loss(pred_rel_poses[:, :, :1] * args.translation_weight,
-                                               y_rel_poses[:, :, :1] * args.translation_weight,
-                                               reduction='none').sum(dim=2).mean(dim=(0, 1))
-                pose_trans_loss_y = F.mse_loss(pred_rel_poses[:, :, 1:2] * args.translation_weight,
-                                               y_rel_poses[:, :, 1:2] * args.translation_weight,
-                                               reduction='none').sum(dim=2).mean(dim=(0, 1))
-                pose_rot_loss = F.mse_loss(pred_rel_poses[:, :, -1:] * args.rotation_weight,
-                                           y_rel_poses[:, :, -1:] * args.rotation_weight,
-                                           reduction='none').sum(dim=2).mean(dim=(0, 1))
-
-                total_loss = pose_trans_loss_x + pose_trans_loss_y + pose_rot_loss
+                (pose_rot_loss, pose_trans_loss_x,
+                 pose_trans_loss_y, total_loss) = compute_loss(args, pred_rel_poses, y_rel_poses)
 
                 loss_avg['total_loss'].append(total_loss)
                 loss_avg['pose_trans_loss_x'].append(pose_trans_loss_x)
@@ -264,22 +212,18 @@ def train(args):
 
                 for _fidx in range(args.clip_length):
                     # (1) evaluate relative pose error (2) no discard_num is used
-                    eval_rel, \
-                        test_rel, \
-                        gt_rel, \
-                        err_rel = eval_rel_error(pred_rel_poses[_fidx],
-                                                 y_rel_poses[_fidx],
-                                                 t_euler_loss=args.t_euler_loss)
+                    (eval_rel, test_rel, gt_rel, err_rel) = eval_rel_error(pred_rel_poses[_fidx],
+                                                                           y_rel_poses[_fidx],
+                                                                           t_euler_loss=args.t_euler_loss)
 
                 new_pose = get_absolute_pose(pred_rel_poses, last_pose)
                 new_gt_pose = get_absolute_pose(y_rel_poses, last_gt_pose)
 
-                eval_glob, \
-                    gt_glob, \
-                    err_glob, \
-                    test_glob = eval_global_error(new_pose[-1],
-                                                  y_global_pose_list[-1].squeeze(0).cpu().numpy(),
-                                                  new_gt_pose[-1])
+                (eval_glob, gt_glob,
+                 err_glob, test_glob) = eval_global_error(new_pose[-1],
+                                                          y_global_pose_list[-1].squeeze(0).cpu().numpy(),
+                                                          new_gt_pose[-1])
+
                 for _met in ['x', 'y', 'theta']:
                     writer.add_scalars(f'test/abs_{_met}',
                                        {
@@ -364,6 +308,21 @@ def train(args):
 
     writer.export_scalars_to_json('{}{}/writer_scalars.json'.format(args.ckp_dir, args.exp_name))
     writer.close()
+
+
+def compute_loss(args, pred_rel_poses, y_rel_poses):
+    pose_trans_loss_x = F.mse_loss(pred_rel_poses[:, :, :1] * args.translation_weight,
+                                   y_rel_poses[:, :, :1] * args.translation_weight,
+                                   reduction='none').sum(dim=2).mean(dim=(0, 1))
+    pose_trans_loss_y = F.mse_loss(pred_rel_poses[:, :, 1:2] * args.translation_weight,
+                                   y_rel_poses[:, :, 1:2] * args.translation_weight,
+                                   reduction='none').sum(dim=2).mean(dim=(0, 1))
+    pose_rot_loss = F.mse_loss(pred_rel_poses[:, :, -1:] * args.rotation_weight,
+                               y_rel_poses[:, :, -1:] * args.rotation_weight,
+                               reduction='none').sum(dim=2).mean(dim=(0, 1))
+    total_loss = pose_trans_loss_x + pose_trans_loss_y + pose_rot_loss
+
+    return pose_rot_loss, pose_trans_loss_x, pose_trans_loss_y, total_loss
 
 
 def main():

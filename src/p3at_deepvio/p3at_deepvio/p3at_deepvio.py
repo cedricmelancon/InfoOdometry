@@ -21,7 +21,7 @@ import time
 class P3atDeepvio(Node):
     def __init__(self):
         super().__init__('P3atDeepvio')
-        
+
         self.background_tasks = set()
 
         self._imu_lock = Lock()
@@ -44,7 +44,7 @@ class P3atDeepvio(Node):
         self._last_position = [29.271869156149368, 129.52834578074683, 0.0, 0.0, 0.0, 0.34944565567934077]
         self._last_camera_data = None
         self._last_stamp = None
-        
+
         self._img_seq = collections.deque(maxlen=self._odometry_model.clip_length)
         self._imu_seq = collections.deque(maxlen=self._odometry_model.clip_length)
         self._odometry_state = torch.zeros(1,
@@ -56,13 +56,13 @@ class P3atDeepvio(Node):
     def image_to_tensor(image, width, height):
         image = image.reshape(height, width)
         image = cv2.cvtColor(image, cv2.COLOR_BAYER_GR2BGR)
-    
+
         return image.transpose(1, 0, 2)
 
     def process_data(self, camera_data, last_camera_data, height, width, imu_seq, current_stamp):
         start_time = time.time()
         camera_data = self.image_to_tensor(camera_data, height, width)
-        
+
         if last_camera_data is not None:
             last_camera_data = self.image_to_tensor(last_camera_data, height, width)
 
@@ -77,11 +77,11 @@ class P3atDeepvio(Node):
             self._img_seq.append(feature_data.squeeze(0).cpu().numpy())
             imu_seq = np.expand_dims(imu_seq, 0)
             tensor_imu_seq = torch.from_numpy(imu_seq).type(torch.FloatTensor).to('cuda:0')
-            
+
             self.execute_model(feature_data, tensor_imu_seq, current_stamp)
 
         #print("--- %s seconds ---" % (time.time() - start_time))
-            
+
     def execute_model(self, tensor_camera_features, tensor_imu_seq, current_stamp):
         self._model_lock.acquire()
         img_seq = np.array(list(self._img_seq))
@@ -128,7 +128,6 @@ class P3atDeepvio(Node):
         else:
             self._model_lock.release()
 
-
     def camera_callback(self, msg):
         self._imu_lock.acquire()
         imu_data = np.array(list(self._imu_data), copy=True)
@@ -143,25 +142,26 @@ class P3atDeepvio(Node):
         camera_data = np.array(list(msg.data), dtype=np.uint8, copy=True)
         self._camera_lock.release()
         last_camera_data = np.array(self._last_camera_data, copy=True) if self._last_camera_data is not None else None
-        task = self.executor.create_task(self.process_data, 
-                                  camera_data, 
-                                  last_camera_data, 
-                                  msg.height, 
-                                  msg.width, 
-                                  imu_data, 
-                                  msg.header.stamp)
-        
+        task = self.executor.create_task(self.process_data,
+                                         camera_data,
+                                         last_camera_data,
+                                         msg.height,
+                                         msg.width,
+                                         imu_data,
+                                         msg.header.stamp)
+
         self.background_tasks.add(task)
         task.add_done_callback(self.background_tasks.discard)
 
         self._last_camera_data = np.array(camera_data, copy=True)
-        
+
     def imu_callback(self, msg):
         self._imu_lock.acquire()
         imu_data = np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z,
-             msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
+                             msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
         self._imu_data.append(imu_data)
         self._imu_lock.release()
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -176,6 +176,7 @@ def main(args=None):
         localization_node.get_logger().info('Shutting down...')
     finally:
         rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()

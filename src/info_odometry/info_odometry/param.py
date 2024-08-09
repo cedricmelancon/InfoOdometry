@@ -9,6 +9,16 @@ class Param:
     def __init__(self):
         self.parser = argparse.ArgumentParser(description='vinetParser')
 
+        # args for building the model
+        self.parser.add_argument('--include_flownet', action='store_const', default=True, const=True,
+                                 help='To include Flownet model in the execution.')
+        self.parser.add_argument('--include_encoder', action='store_const', default=True, const=True,
+                                 help='To include encoder module in the execution.')
+        self.parser.add_argument('--include_transition', action='store_const', default=True, const=True,
+                                 help='To include transition module in the execution.')
+        self.parser.add_argument('--include_pose', action='store_const', default=True, const=True,
+                                 help='To include pose module in the execution.')
+
         # args for failure case uncertainty analysis
         self.parser.add_argument('--eval_failure', action='store_const', default=False, const=True,
                                  help='need to be used with --eval')

@@ -1,37 +1,51 @@
 import torch
 import os
 
-from info_odometry.info_model import bottle
-from info_odometry.utils.tools import construct_models
+from info_odometry.model import (OdometryModelFlownet2S,
+                                 OdometryModelEncoder,
+                                 OdometryModelTransition,
+                                 OdometryModelPose)
+from info_odometry.utils.tools import bottle
 
 
 class OdometryModel:
     def __init__(self, args):
+        self.index = None
         self.args = args
         self.model_dicts = None
 
-        print(args.device)
-        # use_imu: denote whether img and imu are used at the same time
-        # args.imu_only: denote only imu is used
-        (self.flownet_model,
-         self.transition_model,
-         self.use_imu,
-         self.use_info,
-         self.observation_model,
-         self.observation_imu_model,
-         self.pose_model,
-         self.encoder) = construct_models(args)
+        self.device = args.device
+
+        self.flownet_model = None
+        self.encoder = None
+        self.transition_model = None
+        self.pose_model = None
+
+        base_args = {
+            'args': args,
+            'belief_size': args.belief_size,
+            'state_size': args.state_size,
+            'hidden_size': args.hidden_size,
+            'embedding_size': args.embedding_size,
+            'activation_function': args.activation_function
+        }
+
+        if args.include_flownet:
+            self.flownet_model = OdometryModelFlownet2S(args).to(device=self.device)
+
+        if args.include_encoder:
+            self.encoder = OdometryModelEncoder(args).to(device=self.device)
+
+        if args.include_transition:
+            self.transition_model = OdometryModelTransition(**base_args).to(device=self.device)
+
+        if args.include_pose:
+            self.pose_model = OdometryModelPose(**base_args).to(device=self.device)
 
         self.clip_length = args.clip_length
         self.initialized = False
 
         self.beliefs = torch.rand(1, self.args.belief_size, device=self.args.device)
-
-        if args.finetune_only_decoder:
-            assert args.finetune
-            print("=> only finetune pose_model, while fixing encoder and transition_model")
-        if args.finetune:
-            assert args.load_model != "none"
 
         if args.load_model != 'none':
             self.load_model(args.load_model)
@@ -42,10 +56,6 @@ class OdometryModel:
             self.param_list = (list(self.transition_model.parameters()) +
                                list(self.pose_model.parameters()) +
                                list(self.encoder.parameters()))
-            if self.observation_model:
-                self.param_list += list(self.observation_model.parameters())
-            if self.observation_imu_model:
-                self.param_list += list(self.observation_imu_model.parameters())
 
     def load_model(self, model_path):
         # NOTE: Load prev ckp after we have specified optimizer
@@ -54,12 +64,6 @@ class OdometryModel:
         print("=> loading previous trained model: {}".format(model_path))
         self.model_dicts = torch.load(model_path, map_location=self.args.device)
         self.transition_model.load_state_dict(self.model_dicts["transition_model"], strict=True)
-        if self.observation_model:
-            self.observation_model.load_state_dict(self.model_dicts["observation_model"], strict=True)
-
-        if self.observation_imu_model:
-            self.observation_imu_model.load_state_dict(self.model_dicts["observation_imu_model"],
-                                                       strict=True)
         self.pose_model.load_state_dict(self.model_dicts["pose_model"], strict=True)
         self.encoder.load_state_dict(self.model_dicts["encoder"], strict=True)
 
@@ -71,22 +75,14 @@ class OdometryModel:
                                                                                          (x_img_pairs,))
         return observations
 
-    def run_train(self, x_img_pairs, x_imu_seqs, init_state, y_rel_poses, init_belief):
+    def run_train(self, x_img_pairs, x_imu_seqs, init_belief):
         self.pose_model.train()
         if self.args.finetune_only_decoder:
             self.encoder.eval()
             self.transition_model.eval()
-            if self.observation_model:
-                self.observation_model.eval()
-            if self.observation_imu_model:
-                self.observation_imu_model.eval()
         else:
             self.encoder.train()
             self.transition_model.train()
-            if self.observation_model:
-                self.observation_model.train()
-            if self.observation_imu_model:
-                self.observation_imu_model.train()
 
         observations = self.eval_flownet_model(x_img_pairs)
 
@@ -98,138 +94,70 @@ class OdometryModel:
         # output: [time, ] with init states already removed
         if self.args.finetune_only_decoder:
             with torch.no_grad():
-                if self.use_imu:
-                    encode_observations = (bottle(self.encoder, (observations,)), x_imu_seqs)
-                elif self.args.imu_only:
-                    encode_observations = x_imu_seqs
-                else:
-                    encode_observations = bottle(self.encoder, (observations,))
-
-                args_transition = {
-                    'prev_state': init_state,  # not used if not use_info
-                    'poses': y_rel_poses,  # not used if not use_info during training
-                    'prev_belief': init_belief,
-                    'observations': encode_observations
-                }
-
-                # if args.hard: args_transition['gumbel_temperature'] = gumbel_tau
-
-                beliefs, \
-                    prior_states, \
-                    prior_means, \
-                    prior_std_devs, \
-                    posterior_states, \
-                    posterior_means, \
-                    posterior_std_devs = self.transition_model(**args_transition)
-
-        else:
-            if self.use_imu:
                 encode_observations = (bottle(self.encoder, (observations,)), x_imu_seqs)
-            elif self.args.imu_only:
-                encode_observations = x_imu_seqs
-            else:
-                encode_observations = bottle(self.encoder, (observations,))
-
-            args_transition = {
-                'prev_state': init_state,  # not used if not use_info
-                'poses': y_rel_poses,  # not used if not use_info during training
-                'prev_belief': init_belief,
-                'observations': encode_observations
-            }
-
-            # if args.hard: args_transition['gumbel_temperature'] = gumbel_tau
-
-            beliefs, \
-                prior_states, \
-                prior_means, \
-                prior_std_devs, \
-                posterior_states, \
-                posterior_means, \
-                posterior_std_devs = self.transition_model(**args_transition)
+                beliefs, posterior_states = self.transition_model(init_belief, encode_observations)
+        else:
+            encode_observations = (bottle(self.encoder, (observations,)), x_imu_seqs)
+            beliefs, posterior_states = self.transition_model(init_belief, encode_observations)
 
         pred_rel_poses = bottle(self.pose_model, (posterior_states,))
 
-        return beliefs, \
-            prior_states, \
-            prior_means, \
-            prior_std_devs, \
-            posterior_states, \
-            posterior_means, \
-            posterior_std_devs, \
-            pred_rel_poses
+        return beliefs, pred_rel_poses
 
-    def run_eval(self, observations, x_imu_seqs, init_state, beliefs):
+    def run_eval(self, observations, x_imu_seqs, beliefs):
         self.pose_model.eval()
         self.encoder.eval()
         self.transition_model.eval()
-        if self.observation_model:
-            self.observation_model.eval()
-        if self.observation_imu_model:
-            self.observation_imu_model.eval()
 
         with torch.no_grad():
             obs_size = observations.size()
             observations = observations.view(obs_size[0], obs_size[1], -1)
 
-            if self.use_imu:
-                encode_observations = (bottle(self.encoder, (observations,)), x_imu_seqs)
-            elif self.args.imu_only:
-                encode_observations = x_imu_seqs
-            else:
-                encode_observations = bottle(self.encoder, (observations,))
+            encode_observations = (bottle(self.encoder, (observations,)), x_imu_seqs)
 
-            # with one more returns: poses
-            self.beliefs, \
-                posterior_states, \
-                _ = self.transition_model(prev_state=beliefs,  # not used if not use_info
-                                          poses=self.pose_model,
-                                          prev_belief=beliefs,
-                                          observations=encode_observations)
+            beliefs, posterior_states = self.transition_model(beliefs, encode_observations)
             pred_rel_poses = bottle(self.pose_model, (posterior_states,))
 
-        return pred_rel_poses
+        return beliefs, pred_rel_poses
 
     def set_eval(self):
         self.pose_model.eval()
         self.encoder.eval()
         self.transition_model.eval()
-        if self.observation_model:
-            self.observation_model.eval()
-        if self.observation_imu_model:
-            self.observation_imu_model.eval()
 
     def step_model(self, observations, x_imu_seqs, init_state):
         if not self.initialized:
             self.set_eval()
-            self.rnn_embed_imu_hiddens, \
-                self.fusion_lstm_hiddens, \
-                self.fusion_features, \
-                self.out_features = self.transition_model.init_data(self.pose_model, torch.rand(1, self.args.belief_size, device=self.args.device))
+
+            prev_beliefs = torch.rand(1, self.args.belief_size, device=self.args.device)
+            (self.rnn_embed_imu_hiddens, self.fusion_lstm_hiddens,
+             self.fusion_features, self.out_features) = self.transition_model.init_data(prev_beliefs)
+
             self.index = 0
             self.initialized = True
         
         pred_rel_poses = None
+
         with torch.no_grad():
             obs_size = observations.size()
             observations = observations.view(obs_size[0], obs_size[1], -1)
             
             encode_observations = (self.encoder(observations), x_imu_seqs)
 
-            self.rnn_embed_imu_hiddens, \
-                self.fusion_lstm_hiddens, \
-                self.fusion_features, \
-                self.out_features[self.index] = self.transition_model.execute_model(self.rnn_embed_imu_hiddens,
-                                                        encode_observations[1],
-                                                        encode_observations[0],
-                                                        encode_observations,
-                                                        self.fusion_features,
-                                                        self.fusion_lstm_hiddens,
-                                                        self.pose_model,
-                                                        self.index)
+            (self.rnn_embed_imu_hiddens,
+             self.fusion_lstm_hiddens,
+             self.fusion_features,
+             self.out_features[self.index]) = self.transition_model.execute_model(self.rnn_embed_imu_hiddens,
+                                                                                  encode_observations[1],
+                                                                                  encode_observations[0],
+                                                                                  self.fusion_features,
+                                                                                  self.fusion_lstm_hiddens,
+                                                                                  self.index)
 
             if self.index == self.clip_length - 1:
                 pred_rel_poses = self.pose_model(self.out_features[self.index])
 
         if self.index < self.clip_length - 1:
             self.index += 1
+
         return pred_rel_poses
