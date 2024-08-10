@@ -6,7 +6,7 @@
 	//"image": "cedricmelancon/ros-ai:latest",
     "runArgs": ["--gpus=all", "-v=/home/cmelancon/dev/data:/data"],
     //"runArgs": ["--gpus=all", "-v=C:\\dev\\data:/data"],
-    //"workspaceMount": "source=${localWorkspaceFolder}/Localization,target=/workspace/,type=bind",
+    "workspaceMount": "source=${localWorkspaceFolder}/Localization,target=/workspace/,type=bind",
 	//"workspaceFolder": "/workspace/",
 	//"mounts": [
 	//	"source=/home/ab73090/dev/data,target=/data/,type=bind,consistency=cached"
