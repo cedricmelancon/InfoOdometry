@@ -99,10 +99,10 @@ class Param:
                                  help='gradient clipping norm')
         self.parser.add_argument('--rec_loss', type=str, default='mean', choices=["sum", "mean"],
                                  help='observation reconstruction loss type: sum or mean')
-        self.parser.add_argument('--load_model', type=str, default='/data/results/ckp/ckp_best-eval-loss.pt',
-                                 help='path for pre-saved models (.pt file) to load')
-        #self.parser.add_argument('--load_model', type=str, default='none',
+        #self.parser.add_argument('--load_model', type=str, default='/data/results/ckp/ckp_best-eval-loss.pt',
         #                         help='path for pre-saved models (.pt file) to load')
+        self.parser.add_argument('--load_model', type=str, default='none',
+                                 help='path for pre-saved models (.pt file) to load')
 
         # args for using FlowNet2/C/S pretrained features
         self.parser.add_argument('--train_img_from_scratch', action='store_const',
@@ -156,24 +156,24 @@ class Param:
                                  choices=["kitti", "mit", "euroc", "vkitti2"],
                                  help='euroc, kitti (determine base_dir, train/eval_sequences')
         self.parser.add_argument('--base_dir', type=str, default='/data', help='should not be specified')
-        self.parser.add_argument('--train_sequences', type=str,
-                                 default='2012-04-03-07-56-24')
-        self.parser.add_argument('--train_sequences_gt', type=str,
-                                 default='2012-04-03-07-56-24_part1_floor2',
-                                 help='separated by , ')
-
         #self.parser.add_argument('--train_sequences', type=str,
-        #                         default='2012-01-25-12-14-25,2012-04-03-07-56-24,2012-04-03-07-56-24,'
-        #                                 '2012-05-02-06-23-02,2012-01-28-12-38-24,2012-01-28-12-38-24,'
-        #                                 '2012-01-27-07-37-01,2012-01-27-07-37-01,2012-02-02-10-44-08',
-        #                         help='separated by , ')
+        #                         default='2012-04-03-07-56-24')
         #self.parser.add_argument('--train_sequences_gt', type=str,
-        #                         default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part4_floor2,'
-        #                                 '2012-04-03-07-56-24_part1_floor2,2012-05-02-06-23-02_part2_floor2,'
-        #                                 '2012-01-28-12-38-24_part1_floor2,2012-01-28-12-38-24_part4_floor2,'
-        #                                 '2012-01-27-07-37-01_part1_floor2,2012-01-27-07-37-01_part3_floor2,'
-        #                                 '2012-02-02-10-44-08_part1_floor2',
+        #                         default='2012-04-03-07-56-24_part1_floor2',
         #                         help='separated by , ')
+
+        self.parser.add_argument('--train_sequences', type=str,
+                                 default='2012-01-25-12-14-25,2012-04-03-07-56-24,'
+                                         '2012-05-02-06-23-02,2012-01-28-12-38-24,2012-01-28-12-38-24,'
+                                         '2012-01-27-07-37-01,2012-01-27-07-37-01,2012-02-02-10-44-08',
+                                 help='separated by , ')
+        self.parser.add_argument('--train_sequences_gt', type=str,
+                                 default='2012-01-25-12-14-25_part1_floor2,2012-04-03-07-56-24_part4_floor2,'
+                                         '2012-05-02-06-23-02_part2_floor2,'
+                                         '2012-01-28-12-38-24_part1_floor2,2012-01-28-12-38-24_part4_floor2,'
+                                         '2012-01-27-07-37-01_part1_floor2,2012-01-27-07-37-01_part3_floor2,'
+                                         '2012-02-02-10-44-08_part1_floor2',
+                                 help='separated by , ')
 
         self.parser.add_argument('--eval_sequences', type=str, default='2012-04-03-07-56-24',
                                  help='separated by , ')
@@ -342,14 +342,13 @@ class Param:
             if self.args.exp_name != '':
                 # backup codes
                 pyfiles = [
-                    '*.py',
-                    'dataset/*.py',
-                    'scripts/*.py',
-                    'utils/*.py',
+                    './info_odometry/*.py',
+                    './info_odometry/dataset/*.py',
+                    './info_odometry/utils/*.py',
                 ]
                 os.mkdir('{}{}/src'.format(self.args.ckp_dir, self.args.exp_name))
                 for pyfile in pyfiles:
-                    os.system('cp {} {}{}/src/'.format(pyfile, self.args.ckp_dir, self.args.exp_name))
+                    os.system('cp -r {} {}{}/src/'.format(pyfile, self.args.ckp_dir, self.args.exp_name))
 
                 # write args before any changes
                 with open('{}{}/src/args.txt'.format(self.args.ckp_dir, self.args.exp_name), mode='w') as f:
