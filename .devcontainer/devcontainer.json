@@ -4,7 +4,8 @@
 	"name": "AI Workspace",
 	"image": "cedricmelancon/ros2_ai:latest",
 	//"image": "cedricmelancon/ros-ai:latest",
-    "runArgs": ["--gpus=all", "-v=C:\\dev\\data:/data"],
+    "runArgs": ["--gpus=all", "-v=/home/cmelancon/dev/data:/data"],
+    //"runArgs": ["--gpus=all", "-v=C:\\dev\\data:/data"],
     //"workspaceMount": "source=${localWorkspaceFolder}/Localization,target=/workspace/,type=bind",
 	//"workspaceFolder": "/workspace/",
 	//"mounts": [
