@@ -68,7 +68,7 @@ This repo also contains **our re-implementations of DeepVO and VINet**:
 
 ## Usage 
 1. training
-    + ```python main.py --gpu 0 --dataset mit --batch_size 8 --epoch 300 --lr_schedule 150,250 --on_the_fly --exp_name XXX --transition_model deepvio```
+    + ```python main.py --gpu 0 --dataset mit --batch_size 8 --epoch 300 --on_the_fly --exp_name XXX --transition_model deepvio```
     + pip install tensorboardX
     + pip install numpy-quaternion
     + pip install transforms3d

@@ -11,18 +11,18 @@ from tqdm import tqdm
 
 import numpy as np
 
-from utils import SequenceTimer
-from utils import RunningAverager
-from utils import ScheduledOptim
+from info_odometry.utils import SequenceTimer
+from info_odometry.utils import RunningAverager
+from info_odometry.utils import ScheduledOptim
 
-from utils.tools import save_model, get_lr
-from utils.odom_model import eval_rel_error, eval_global_error
-from utils.transforms import get_absolute_pose
+from info_odometry.utils.tools import save_model, get_lr
+from info_odometry.utils.odom_model import eval_rel_error, eval_global_error
+from info_odometry.utils.transforms import get_absolute_pose
 
-from param import Param
-from odometry_model import OdometryModel
+from info_odometry.param import Param
+from info_odometry.odometry_model import OdometryModel
 
-from dataset.mit_stata_center_dataset import load_mit_clips
+from info_odometry.dataset.mit_stata_center_dataset import load_mit_clips
 
 
 def save_data(writer, loss, labels_global, labels_delta, pred_abs, pred_rel, epoch, n_iter):

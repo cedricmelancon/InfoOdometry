@@ -4,8 +4,7 @@ import os
 import glob
 from pathlib import Path
 import numpy as np
-import flownet_utils.frame_utils as frame_utils
-from flownet_utils.frame_utils import StaticCenterCrop
+from .flownet_utils.frame_utils import StaticCenterCrop, read_gen
 import PIL
 from PIL import Image
 import torch
@@ -169,8 +168,8 @@ def get_mit_imgpair(last_img, curr_img, base_dir, img_transforms=None, render_si
     if img_transforms is None:
         # use FlowNet2/C/S
         assert render_size is not None
-        img1 = frame_utils.read_gen(last_img_path)
-        img2 = frame_utils.read_gen(curr_img_path)
+        img1 = read_gen(last_img_path)
+        img2 = read_gen(curr_img_path)
         images = [img1, img2]
         image_size = img1.shape[:2]
         cropper = StaticCenterCrop(image_size, render_size)

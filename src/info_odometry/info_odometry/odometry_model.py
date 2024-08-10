@@ -2,9 +2,9 @@ import torch
 import os
 
 from info_odometry.model import (OdometryModelFlownet2S,
-                                 OdometryModelEncoder,
-                                 OdometryModelTransition,
-                                 OdometryModelPose)
+                    OdometryModelEncoder,
+                    OdometryModelTransition,
+                    OdometryModelPose)
 from info_odometry.utils.tools import bottle
 
 
@@ -21,21 +21,26 @@ class OdometryModel:
         self.transition_model = None
         self.pose_model = None
 
+        if args.include_flownet:
+            self.flownet_model = OdometryModelFlownet2S(args).to(device=self.device)
+
         base_args = {
             'args': args,
-            'belief_size': args.belief_size,
-            'state_size': args.state_size,
-            'hidden_size': args.hidden_size,
             'embedding_size': args.embedding_size,
             'activation_function': args.activation_function
         }
 
-        if args.include_flownet:
-            self.flownet_model = OdometryModelFlownet2S(args).to(device=self.device)
-
         if args.include_encoder:
-            self.encoder = OdometryModelEncoder(args).to(device=self.device)
+            self.encoder = OdometryModelEncoder(**base_args).to(device=self.device)
 
+        base_args = {
+            'args': args,
+            'embedding_size': args.embedding_size,
+            'activation_function': args.activation_function,
+            'belief_size': args.belief_size,
+            'state_size': args.state_size,
+            'hidden_size': args.hidden_size,
+        }
         if args.include_transition:
             self.transition_model = OdometryModelTransition(**base_args).to(device=self.device)
 

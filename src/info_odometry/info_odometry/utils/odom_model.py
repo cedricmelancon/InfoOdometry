@@ -1,5 +1,5 @@
 import numpy as np
-from transforms import get_relative_pose
+from .transforms import get_relative_pose
 
 
 def eval_rel_error(pred_rel_pose, gt_rel_pose, t_euler_loss):

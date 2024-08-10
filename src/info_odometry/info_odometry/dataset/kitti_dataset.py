@@ -9,18 +9,17 @@ import random
 #from torch._six import int_classes as _int_classes
 from torchvision import transforms
 
-from src.info_odometry.info_odometry.utils.file_io import read_kitti_pose
-from src.info_odometry.info_odometry.utils.file_io import read_kitti_img
-from src.info_odometry.info_odometry.utils.file_io import read_kitti_imu
-from src.info_odometry.info_odometry.utils.file_io import get_kitti_imgpair
-from src.info_odometry.info_odometry.utils.file_io import get_kitti_depthpair
+from .utils.file_io import read_kitti_pose
+from .utils.file_io import read_kitti_img
+from .utils.file_io import read_kitti_imu
+from .utils.file_io import get_kitti_imgpair
+from .utils.file_io import get_kitti_depthpair
 
-from utils.tools import get_relative_pose 
-from utils.tools import get_zero_se3
-from utils.tools import euler_to_quaternion
-from utils.tools import rotationMatrixToEulerAngles
-import flownet_utils.frame_utils as frame_utils
-from flownet_utils.frame_utils import StaticCenterCrop
+from info_odometry.utils.transforms import get_relative_pose 
+from info_odometry.utils.se3 import get_zero_se3
+from info_odometry.utils.quaternion import euler_to_quaternion
+from info_odometry.utils.quaternion import rotationMatrixToEulerAngles
+from .utils.flownet_utils.frame_utils import StaticCenterCrop, read_gen
 
 
 def get_img_transforms(args, img_mean=None, img_std=None):
@@ -163,7 +162,7 @@ class KittiClipDataset(torch.utils.data.Dataset):
                     img_data = self.img_transforms(PIL.Image.open(img_path))
                 else: 
                     # use FlowNet2/C/S pretrained models
-                    tmp_img = frame_utils.read_gen(img_path)
+                    tmp_img = read_gen(img_path)
                     image_size = tmp_img.shape[:2]
                     cropper = StaticCenterCrop(image_size, self.render_size)
                     img_data = cropper(tmp_img)

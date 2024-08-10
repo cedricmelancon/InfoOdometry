@@ -2,16 +2,16 @@ import os
 import torch
 
 try:
-    from info_odometry.flownet import FlowNetS
-    from info_odometry.flownet.submodules import *
+    from flownet.FlownetS import FlowNetS
+    from flownet.submodules import *
 except:
-    from .info_odometry.flownet import FlowNetS
-    from .info_odometry.flownet.submodules import *
+    from .flownet.FlowNetS import FlowNetS
+    from .flownet.submodules import *
 
 
-class OdometryModelFlownet2S(FlowNetS.FlowNetS):
+class OdometryModelFlownet2S(FlowNetS):
     def __init__(self, args, batch_norm=False):
-        super(OdometryModelFlownet2S, self).__init__(input_channels=6, batchNorm=batch_norm)
+        super(OdometryModelFlownet2S, self).__init__(input_channels=6, batch_norm=batch_norm)
 
         self.rgb_max = 255.0
         self.flownet_model_name = args.flownet_model

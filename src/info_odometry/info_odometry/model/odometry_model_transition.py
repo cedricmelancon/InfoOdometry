@@ -165,7 +165,7 @@ class OdometryModelTransition(nn.Module):
         T = self.args.clip_length + 1
 
         (rnn_embed_imu_hiddens, fusion_lstm_hiddens,
-         fusion_features, out_features, pred_poses) = self.init_data(prev_belief)
+         fusion_features, out_features) = self.init_data(prev_belief)
 
         for t in range(T - 1):
             t_ = t - 1  # Use t_ to deal with different time indexing for observations
@@ -183,7 +183,6 @@ class OdometryModelTransition(nn.Module):
              fusion_features, out_features[t_ + 1]) = self.execute_model(**args_execution)
 
         hidden = [torch.stack(fusion_features, dim=0),
-                  torch.stack(out_features, dim=0),
-                  torch.stack(pred_poses, dim=0)]
+                  torch.stack(out_features, dim=0)]
 
         return hidden

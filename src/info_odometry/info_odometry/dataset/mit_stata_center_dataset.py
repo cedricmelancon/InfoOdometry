@@ -6,18 +6,17 @@ import torch
 from tqdm import tqdm
 import random
 
+from info_odometry.utils.transforms import get_relative_pose
+
 # from torch._six import int_classes as _int_classes
+from .utils.mit_file_io import read_mit_pose
+from .utils.mit_file_io import read_mit_img
+from .utils.mit_file_io import read_mit_imu
+from .utils.mit_file_io import get_mit_imgpair
+from .utils.mit_file_io import get_pose_by_timestamps
+from .utils.mit_file_io import get_mit_depthpair
 
-from info_odometry.utils.mit_file_io import read_mit_pose
-from info_odometry.utils.mit_file_io import read_mit_img
-from info_odometry.utils.mit_file_io import read_mit_imu
-from info_odometry.utils.mit_file_io import get_mit_imgpair
-from info_odometry.utils.mit_file_io import get_pose_by_timestamps
-from info_odometry.utils.mit_file_io import get_mit_depthpair
-
-from utils.tools import get_relative_pose
-import flownet_utils.frame_utils as frame_utils
-from flownet_utils.frame_utils import StaticCenterCrop
+from .utils.flownet_utils.frame_utils import StaticCenterCrop, read_gen
 
 
 class MitStataCenterClipDataset(torch.utils.data.Dataset):
@@ -143,7 +142,7 @@ class MitStataCenterClipDataset(torch.utils.data.Dataset):
                     img_data = self.img_transforms(PIL.Image.open(img_path))
                 else:
                     # use FlowNet2/C/S pretrained models
-                    tmp_img = frame_utils.read_gen(img_path)
+                    tmp_img = read_gen(img_path)
                     image_size = tmp_img.shape[:2]
                     cropper = StaticCenterCrop(image_size, self.render_size)
                     img_data = cropper(tmp_img)
