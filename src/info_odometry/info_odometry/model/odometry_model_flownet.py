@@ -21,10 +21,10 @@ class OdometryModelFlownet2S(FlowNetS):
                 raise ValueError('if --flownet_model -> --train_img_from_scratch should not be used')
 
     def load_model(self, model_path):
-        assert os.path.exists(model_path)
+        # assert os.path.exists(model_path)
 
-        #resume_ckp = '/data/results/ckp/pretrained_flownet/{}_checkpoint.pth.tar'.format(self.flownet_model_name)
-        flow_ckp = torch.load(model_path)
+        resume_ckp = '/data/results/ckp/pretrained_flownet/{}_checkpoint.pth.tar'.format(self.flownet_model_name)
+        flow_ckp = torch.load(resume_ckp)
         self.load_state_dict(flow_ckp['state_dict'])
 
     def forward(self, inputs):

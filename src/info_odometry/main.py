@@ -31,7 +31,7 @@ def save_data(writer, loss, labels_global, labels_delta, pred_abs, pred_rel, epo
                           labels_global.cpu().detach().numpy()[-1, :],
                           labels_delta.cpu().detach().numpy()[-1, :],
                           pred_rel.cpu().detach().numpy()[-1, :],
-                          np.array(pred_abs)[-1,:]), axis=None)
+                          np.array(pred_abs)), axis=None)
     writer.writerow(row)
 
 
@@ -215,14 +215,14 @@ def train(args):
                     (eval_rel, test_rel, gt_rel, err_rel) = eval_rel_error(pred_rel_poses[_fidx],
                                                                            y_rel_poses[_fidx],
                                                                            t_euler_loss=args.t_euler_loss)
-
-                new_pose = get_absolute_pose(pred_rel_poses, last_pose)
-                new_gt_pose = get_absolute_pose(y_rel_poses, last_gt_pose)
+                    
+                new_pose = get_absolute_pose(pred_rel_poses[-1], last_pose)
+                new_gt_pose = get_absolute_pose(y_rel_poses[-1], last_gt_pose)
 
                 (eval_glob, gt_glob,
-                 err_glob, test_glob) = eval_global_error(new_pose[-1],
+                 err_glob, test_glob) = eval_global_error(new_pose,
                                                           y_global_pose_list[-1].squeeze(0).cpu().numpy(),
-                                                          new_gt_pose[-1])
+                                                          new_gt_pose)
 
                 for _met in ['x', 'y', 'theta']:
                     writer.add_scalars(f'test/abs_{_met}',
@@ -251,8 +251,8 @@ def train(args):
                           pred_rel_poses,
                           epoch_idx,
                           batch_idx)
-                last_pose = torch.from_numpy(new_pose[0])
-                last_gt_pose = torch.from_numpy(new_gt_pose[0])
+                last_pose = torch.from_numpy(new_pose)
+                last_gt_pose = torch.from_numpy(new_gt_pose)
 
                 batch_timer.tictoc()
 

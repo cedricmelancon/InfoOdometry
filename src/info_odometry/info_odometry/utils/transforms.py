@@ -14,6 +14,7 @@ def _init_transforms(euler, translation):
 
 
 def _get_trans_euler_from_vector(t, force_zero=False):
+    assert t.shape[0] == 6
     translation = t[:3]
     euler = t[-3:]
 
@@ -51,22 +52,22 @@ def get_absolute_pose_step(dt, state):
 
     transform_result = np.dot(transform_state, transform_dt)
 
-    euler_result = R.from_matrix(transform_result[:3, :3]).as_quat()
+    euler_result = R.from_matrix(transform_result[:3, :3]).as_euler('zyx')
     trans_result = transform_result[:3, 3]
 
     return np.concatenate((trans_result, euler_result), 0)
 
 
 def get_absolute_pose(dt, state):
+
     clip_size = dt.size()[0]
     result = [torch.empty(0)] * clip_size
 
     last_state = state.squeeze(0).squeeze(0).cpu().numpy()
-    for i in range(clip_size):
-        if i > 0:
-            last_state = result[i - 1]
+    # for i in range(clip_size):
+    #     if i > 0:
+    #         last_state = result[i - 1]
+    #     value = get_absolute_pose_step(dt[i].squeeze(0).cpu().numpy(), last_state)
+    #     result[i] = value
 
-        value = get_absolute_pose_step(dt[i].squeeze(0).cpu().numpy(), last_state)
-        result[i] = value
-
-    return result
+    return get_absolute_pose_step(dt.squeeze(0).cpu().numpy(), last_state)

@@ -23,6 +23,7 @@ class OdometryModel:
 
         if args.include_flownet:
             self.flownet_model = OdometryModelFlownet2S(args).to(device=self.device)
+            self.flownet_model.load_model("")
 
         base_args = {
             'args': args,
