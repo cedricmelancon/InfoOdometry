@@ -22,8 +22,7 @@ def bottle(f, x_tuple):
 
 
 def save_model(path, transition_model, pose_model, encoder, optimizer,
-               epoch, metrics, observation_model=None,
-               observation_imu_model=None):
+               epoch, metrics):
     states = {
         'transition_model': transition_model.state_dict(),
         'pose_model': pose_model.state_dict(),
@@ -32,10 +31,6 @@ def save_model(path, transition_model, pose_model, encoder, optimizer,
         'epoch': epoch,
         'metrics': metrics
     }
-    if observation_model:
-        states['observation_model'] = observation_model.state_dict()
-    if observation_imu_model:
-        states['observation_imu_model'] = observation_imu_model.state_dict()
     torch.save(states, path)
 
 

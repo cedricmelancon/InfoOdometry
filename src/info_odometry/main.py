@@ -268,8 +268,6 @@ def train(args):
             check_str = '{}{}/ckp_latest.pt'.format(args.ckp_dir, args.exp_name)
             save_args = {
                 'transition_model': odometry_model.transition_model,
-                'observation_model': odometry_model.observation_model, # None if not used
-                'observation_imu_model': odometry_model.observation_imu_model, # None if not used
                 'pose_model': odometry_model.pose_model,
                 'encoder': odometry_model.encoder,
                 'optimizer': optimizer,
