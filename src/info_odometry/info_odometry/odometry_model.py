@@ -1,5 +1,6 @@
 import torch
 import os
+import time
 
 from info_odometry.info_model import bottle
 from info_odometry.utils.tools import construct_models
@@ -10,7 +11,7 @@ class OdometryModel:
         self.args = args
         self.model_dicts = None
 
-        print(args.device)
+        #print(args.device)
         # use_imu: denote whether img and imu are used at the same time
         # args.imu_only: denote only imu is used
         (self.flownet_model,
@@ -210,10 +211,13 @@ class OdometryModel:
         
         pred_rel_poses = None
         with torch.no_grad():
+            start_time = time.perf_counter()
+
             obs_size = observations.size()
             observations = observations.view(obs_size[0], obs_size[1], -1)
             
             encode_observations = (self.encoder(observations), x_imu_seqs)
+            encoder_time = time.perf_counter()
 
             self.rnn_embed_imu_hiddens, \
                 self.fusion_lstm_hiddens, \
@@ -226,10 +230,14 @@ class OdometryModel:
                                                         self.fusion_lstm_hiddens,
                                                         self.pose_model,
                                                         self.index)
+            transition_time = time.perf_counter()
+            timing = None
 
             if self.index == self.clip_length - 1:
                 pred_rel_poses = self.pose_model(self.out_features[self.index])
+                pose_time = time.perf_counter()
+                timing = [encoder_time - start_time, transition_time - encoder_time, pose_time- transition_time]
 
         if self.index < self.clip_length - 1:
             self.index += 1
-        return pred_rel_poses
+        return pred_rel_poses, timing

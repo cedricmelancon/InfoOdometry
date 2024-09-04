@@ -6,7 +6,11 @@ log/
 tb_dir/
 __pycache__/
 */__pycache__/
-*/build/
+**/build/
+**/install
+**/log
+*.pdf
+*.csv
 */dist/
 *_cuda.egg-info/
 .idea/

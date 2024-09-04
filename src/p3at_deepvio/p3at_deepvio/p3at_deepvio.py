@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.callback_groups import ReentrantCallbackGroup
 
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image
@@ -16,12 +17,12 @@ from info_odometry.odometry_model import OdometryModel
 from info_odometry.param import Param
 from info_odometry.utils.tools import get_absolute_pose_step
 import time
+import csv
 
 
 class P3atDeepvio(Node):
     def __init__(self):
         super().__init__('P3atDeepvio')
-        
         self.background_tasks = set()
 
         self._imu_lock = Lock()
@@ -30,16 +31,21 @@ class P3atDeepvio(Node):
 
         self.skip_frame = 5
         self.frame_nb = 0
+        self.timing_monitor = {}
+
         param = Param()
         args = param.get_args()
         np.random.seed(args.seed)
         torch.manual_seed(args.seed)
         torch.cuda.manual_seed(args.seed)
 
+        self._cb_group = ReentrantCallbackGroup()
+
         self._odometry_model = OdometryModel(args)
-        self._publisher = self.create_publisher(Odometry, 'deepvio_odometry', 10)
-        self._imu_subscriber = self.create_subscription(Imu, '/torso_lift_imu/data', self.imu_callback, 10)
-        self._camera_subscriber = self.create_subscription(Image, '/camera/rgb/image_raw', self.camera_callback, 10)
+
+        self._publisher = self.create_publisher(Odometry, 'deepvio_odometry', 10, callback_group=self._cb_group)
+        self._imu_subscriber = self.create_subscription(Imu, '/torso_lift_imu/data', self.imu_callback, 10, callback_group=self._cb_group)
+        self._camera_subscriber = self.create_subscription(Image, '/camera/rgb/image_raw', self.camera_callback, 10, callback_group=self._cb_group)
         self._imu_data = collections.deque(maxlen=3)
         self._last_position = [29.271869156149368, 129.52834578074683, 0.0, 0.0, 0.0, 0.34944565567934077]
         self._last_camera_data = None
@@ -47,10 +53,26 @@ class P3atDeepvio(Node):
         
         self._img_seq = collections.deque(maxlen=self._odometry_model.clip_length)
         self._imu_seq = collections.deque(maxlen=self._odometry_model.clip_length)
+        self._monitoring_data = collections.deque()
         self._odometry_state = torch.zeros(1,
                                            self._odometry_model.args.state_size,
                                            device=self._odometry_model.args.device)
         self._beliefs = None
+        self._monitoring_task = None
+
+        self.get_logger().info('Running')
+
+    def write_timing(self):
+        csvfile = open(f'monitoring.csv', 'w', newline='')
+        self.csvwriter = csv.writer(csvfile, delimiter=' ')
+
+        self.get_logger().info('Writing timing.')
+
+        while len(self._monitoring_data) > 0:
+            self.csvwriter.writerow(self._monitoring_data.pop())
+
+        self.get_logger().info('Timing written.')
+                
 
     @staticmethod
     def image_to_tensor(image, width, height):
@@ -60,10 +82,10 @@ class P3atDeepvio(Node):
         return image.transpose(1, 0, 2)
 
     def process_data(self, camera_data, last_camera_data, height, width, imu_seq, current_stamp):
-        start_time = time.time()
         camera_data = self.image_to_tensor(camera_data, height, width)
-        
+
         if last_camera_data is not None:
+            start_time = time.perf_counter()
             last_camera_data = self.image_to_tensor(last_camera_data, height, width)
 
             img_pair = [last_camera_data, camera_data]
@@ -72,31 +94,36 @@ class P3atDeepvio(Node):
             img_pair = np.expand_dims(img_pair, axis=0)
             img_pair = torch.from_numpy(img_pair).type(torch.FloatTensor).to('cuda:0')
 
+            self._model_lock.acquire()
             feature_data = torch.clone(self._odometry_model.eval_flownet_model(img_pair))
+            flownet_time = (time.perf_counter() - start_time)
 
             self._img_seq.append(feature_data.squeeze(0).cpu().numpy())
             imu_seq = np.expand_dims(imu_seq, 0)
             tensor_imu_seq = torch.from_numpy(imu_seq).type(torch.FloatTensor).to('cuda:0')
             
-            self.execute_model(feature_data, tensor_imu_seq, current_stamp)
-
-        #print("--- %s seconds ---" % (time.time() - start_time))
+            odometry, timing_monitor = self.execute_model(feature_data, tensor_imu_seq, current_stamp)
             
+            if odometry is not None:
+                self._monitoring_data.append(np.array([self.frame_nb, flownet_time] + timing_monitor + [time.perf_counter() - start_time]))
+
+            self._model_lock.release()
+        
     def execute_model(self, tensor_camera_features, tensor_imu_seq, current_stamp):
-        self._model_lock.acquire()
         img_seq = np.array(list(self._img_seq))
         imu_seq = np.array(list(self._imu_seq))
-        odometry = self._odometry_model.step_model(
+        result = None
+        odometry, timing_monitor = self._odometry_model.step_model(
             torch.from_numpy(img_seq).type(torch.FloatTensor).to('cuda:0'),
             torch.from_numpy(imu_seq).type(torch.FloatTensor).to('cuda:0'),
             self._odometry_state)
 
         if odometry is not None:
             odometry = odometry.cpu().numpy()[0]
+            result = odometry
             dt = [float(odometry[0]), float(odometry[1]), 0.0, 0.0, 0.0, float(odometry[5])]
 
             self._last_position = get_absolute_pose_step(dt, self._last_position)
-            self._model_lock.release()
             odometry_msg = Odometry()
             odometry_msg.header.stamp = current_stamp
             odometry_msg.pose.pose.position.x = float(self._last_position[0])
@@ -124,9 +151,10 @@ class P3atDeepvio(Node):
             #    odometry_msg.twist.angular.y = 0.0
             #    odometry_msg.twist.angular.z = 0.0
 
+            #self.rate_counter.inc()
             self._publisher.publish(odometry_msg)
-        else:
-            self._model_lock.release()
+        
+        return result, timing_monitor
 
 
     def camera_callback(self, msg):
@@ -139,6 +167,7 @@ class P3atDeepvio(Node):
             self.frame_nb += 1
             return
 
+        self.frame_nb += 1
         self._camera_lock.acquire()
         camera_data = np.array(list(msg.data), dtype=np.uint8, copy=True)
         self._camera_lock.release()
@@ -151,8 +180,8 @@ class P3atDeepvio(Node):
                                   imu_data, 
                                   msg.header.stamp)
         
-        self.background_tasks.add(task)
-        task.add_done_callback(self.background_tasks.discard)
+        #self.background_tasks.add(task)
+        #task.add_done_callback(self.background_tasks.discard)
 
         self._last_camera_data = np.array(camera_data, copy=True)
         
@@ -165,7 +194,6 @@ class P3atDeepvio(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-
     executor = rclpy.executors.MultiThreadedExecutor(num_threads=8)
     localization_node = P3atDeepvio()
     executor.add_node(localization_node)
@@ -175,7 +203,9 @@ def main(args=None):
     except KeyboardInterrupt:
         localization_node.get_logger().info('Shutting down...')
     finally:
-        rclpy.shutdown()
+        executor.shutdown()
+
+    localization_node.write_timing()
 
 if __name__ == '__main__':
     main()
