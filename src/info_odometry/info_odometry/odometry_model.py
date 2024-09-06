@@ -225,10 +225,8 @@ class OdometryModel:
                 self.out_features[self.index] = self.transition_model.execute_model(self.rnn_embed_imu_hiddens,
                                                         encode_observations[1],
                                                         encode_observations[0],
-                                                        encode_observations,
                                                         self.fusion_features,
                                                         self.fusion_lstm_hiddens,
-                                                        self.pose_model,
                                                         self.index)
             transition_time = time.perf_counter()
             timing = None

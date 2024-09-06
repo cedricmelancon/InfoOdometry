@@ -101,21 +101,15 @@ class SeqVINet(nn.Module):
                       rnn_embed_imu_hiddens, 
                       observations_imu, 
                       observations_visual, 
-                      observation, 
                       fusion_features, 
                       fusion_lstm_hiddens,
-                      poses,
                       t):
-        use_pose_model = True if type(poses) == PoseModel else False
         t_ = t - 1 # Use t_ to deal with different time indexing for observations
 
-        if self.use_imu:
-            hidden, rnn_embed_imu_hiddens[t + 1] = self.rnn_embed_imu(observations_imu[t_ + 1], rnn_embed_imu_hiddens[t])
-            fused_feat = torch.cat([observations_visual[t_ + 1], hidden[:,-1,:]], dim=1)
-                
-            hidden = self.act_fn(self.dropout(self.fc_embed_sensors(fused_feat), 0.5))
-        else:
-            hidden = self.act_fn(self.dropout(self.fc_embed_sensors(observation), 0.5))
+        hidden, rnn_embed_imu_hiddens[t + 1] = self.rnn_embed_imu(observations_imu[t_ + 1], rnn_embed_imu_hiddens[t])
+        fused_feat = torch.cat([observations_visual[t_ + 1], hidden[:,-1,:]], dim=1)
+            
+        hidden = self.act_fn(self.dropout(self.fc_embed_sensors(fused_feat), 0.5))
             
         if self.args.belief_rnn == 'gru':
             fusion_features[t + 1] = self.rnn_fusion(hidden, fusion_features[t])
@@ -184,11 +178,8 @@ class SeqVINet(nn.Module):
                 pred_poses[t_ + 1] = self.execute_model(rnn_embed_imu_hiddens,
                                                         observations[1],
                                                         observations[0],
-                                                        observations,
                                                         fusion_features,
                                                         fusion_lstm_hiddens,
-                                                        poses,
-                                                        pred_poses,
                                                         t)
         
         hidden = [torch.stack(fusion_features, dim=0), torch.stack(out_features, dim=0)]
