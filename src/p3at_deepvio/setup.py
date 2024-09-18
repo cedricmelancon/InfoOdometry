@@ -11,7 +11,10 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools'],
+    install_requires=[
+        'setuptools',
+        'blazeaiot-core-nodemanager'
+    ],
     zip_safe=True,
     author='Cedric Melancon',
     author_email='cedric.melancon.1@ens.etsmtl.ca',

@@ -16,6 +16,8 @@ import collections
 from info_odometry.odometry_model import OdometryModel
 from info_odometry.param import Param
 from info_odometry.utils.tools import get_absolute_pose_step
+
+from BlazeAIoT.Core.NodeManager import ServiceManager
 import time
 import csv
 
@@ -23,7 +25,7 @@ import csv
 class P3atDeepvio(Node):
     def __init__(self):
         super().__init__('P3atDeepvio')
-        self.background_tasks = set()
+        self._service_manager = ServiceManager()
 
         self._imu_lock = Lock()
         self._camera_lock = Lock()
@@ -173,16 +175,6 @@ class P3atDeepvio(Node):
                           msg.height, 
                           msg.width, 
                           msg.header.stamp)
-        # task = self.executor.create_task(self.process_data, 
-        #                           camera_data, 
-        #                           last_camera_data, 
-        #                           msg.height, 
-        #                           msg.width, 
-        #                           imu_data, 
-        #                           msg.header.stamp)
-        
-        #self.background_tasks.add(task)
-        #task.add_done_callback(self.background_tasks.discard)
 
         self._last_camera_data = np.array(camera_data)
         

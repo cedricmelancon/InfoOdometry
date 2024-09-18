@@ -20,4 +20,3 @@ transforms3d
 torchvision
 pandas
 matplotlib
-blazeaiot-core-nodemanager
