@@ -17,7 +17,7 @@ from info_odometry.odometry_model import OdometryModel
 from info_odometry.param import Param
 from info_odometry.utils.tools import get_absolute_pose_step
 
-#from BlazeAIoT.Core.NodeManager import ServiceManager
+from BlazeAIoT.Core.NodeManager import ServiceManager
 import time
 import csv
 
@@ -25,7 +25,7 @@ import csv
 class P3atDeepvio(Node):
     def __init__(self):
         super().__init__('P3atDeepvio')
-        #self._service_manager = ServiceManager()
+        self._service_manager = ServiceManager()
 
         self._imu_lock = Lock()
         self._camera_lock = Lock()
@@ -47,7 +47,7 @@ class P3atDeepvio(Node):
 
         self._odometry_model = OdometryModel(args)
 
-        self._publisher = self.create_publisher(Odometry, 'deepvio_odometry', 10, callback_group=publisher_group)
+        self._publisher = self.create_publisher(Odometry, '', 10, callback_group=publisher_group)
         self._imu_subscriber = self.create_subscription(Imu, '/torso_lift_imu/data', self.imu_callback, 10, callback_group=subscriber1_group)
         self._camera_subscriber = self.create_subscription(Image, '/camera/rgb/image_raw', self.camera_callback, 10, callback_group=subscriber2_group)
         self._imu_data = collections.deque(maxlen=3)
