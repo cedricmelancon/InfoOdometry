@@ -2,13 +2,13 @@
 // README at: https://github.com/devcontainers/templates/tree/main/src/cpp
 {
 	"name": "AI Workspace",
-	"image": "cedricmelancon/ai-dev-environment:latest",
+	"image": "cedricmelancon/ros2ai:24.04",
 	//"image": "cedricmelancon/ros-ai:latest",
-    "runArgs": ["--gpus=all", "-p 6006:6006"],
+    "runArgs": ["--gpus=all"],
     //"workspaceMount": "source=${localWorkspaceFolder}/Localization,target=/workspace/,type=bind",
 	//"workspaceFolder": "/workspace/",
 	"mounts": [
-		"source=c:\\dev\\data,target=/data/,type=bind,consistency=cached"
+		"source=/home/ab73090/dev/data,target=/data/,type=bind,consistency=cached"
 	],
 	//"customizations": {
 	//	"vscode": {

@@ -4,7 +4,6 @@ tensorboard
 tensorboardX
 sympy
 pybind11
-cython
 numpy
 numpy-quaternion
 numba
@@ -21,4 +20,3 @@ transforms3d
 torchvision
 pandas
 matplotlib
-pytorch3d
