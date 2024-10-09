@@ -4,38 +4,27 @@ from torch.distributions import Normal
 from torch.distributions.kl import kl_divergence
 import torch.utils.data
 import torch.nn as nn
+from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
 
-from timeit import default_timer as timer
 from tqdm import tqdm
-
 import os
 import pdb
 import numpy as np
-import quaternion
-from transforms3d import euler
-
-from utils import SequenceTimer
-from utils import RunningAverager
-from utils import ModelUtils
-from utils import TransformUtils
-from utils import SequenceTimer
-from utils import ScheduledOptimizer
-
-from param import Param
-from dataset.mit_stata_center_dataset import load_mit_clips
-from info_odometry import InfoOdometry
-
-from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
-
+from tensorboardX import SummaryWriter
 import csv
+from timeit import default_timer as timer
 
-
-from dataset.mit_stata_center_dataset import load_mit_clips
-
+from info_odometry.utils import SequenceTimer
+from info_odometry.utils import RunningAverager
+from info_odometry.utils import ModelUtils
+from info_odometry.utils import TransformUtils
+from info_odometry.utils import SequenceTimer
+from info_odometry.utils import ScheduledOptimizer
+from info_odometry.dataset.mit_stata_center_dataset import load_mit_clips
+from info_odometry.odometry_model import OdometryModel
 import torch.optim as optim
 
-
-from tensorboardX import SummaryWriter
+from param import Param
 
 
 def save_data(writer, loss, labels_global, labels_delta, pred_abs, pred_rel, epoch, n_iter):
@@ -47,6 +36,28 @@ def save_data(writer, loss, labels_global, labels_delta, pred_abs, pred_rel, epo
                           np.array(pred_abs)[-1, :]), axis=None)
     writer.writerow(row)
 
+
+def compute_loss(args, pred_rel_poses, y_rel_poses):
+    pose_trans_loss_x = F.mse_loss(pred_rel_poses[:, :, :1] * args.translation_weight,
+                                   y_rel_poses[:, :, :1] * args.translation_weight,
+                                   reduction='none').sum(dim=2).mean(dim=(0, 1))
+    pose_trans_loss_y = F.mse_loss(pred_rel_poses[:, :, 1:2] * args.translation_weight,
+                                   y_rel_poses[:, :, 1:2] * args.translation_weight,
+                                   reduction='none').sum(dim=2).mean(dim=(0, 1))
+    pose_rot_loss = F.mse_loss(pred_rel_poses[:, :, -1:] * args.rotation_weight,
+                               y_rel_poses[:, :, -1:] * args.rotation_weight,
+                               reduction='none').sum(dim=2).mean(dim=(0, 1))
+
+    total_loss = pose_trans_loss_x + pose_trans_loss_y + pose_rot_loss
+
+    # if self.use_info:
+    #     total_loss += kl_loss
+    #     if self.args.observation_beta != 0:
+    #         total_loss += observation_loss
+    #     if self._use_imu and self.args.observation_imu_beta != 0:
+    #         total_loss += observation_imu_loss
+
+    return total_loss, pose_trans_loss_x, pose_trans_loss_y, pose_rot_loss
 
 def train(model, args):
     """
@@ -155,6 +166,9 @@ def train(model, args):
              y_last_global_pose_list,
              y_global_pose_list, _, _) = batch_data
 
+            # [time, batch, 6]
+            y_rel_poses = torch.stack(y_rel_pose_list, dim=0).type(torch.FloatTensor).to(device=args.device)
+
             # transitions start at time t = 0
             # create initial belief and state for time t = 0
             x_img_pairs = torch.stack(x_img_list, dim=0)
@@ -163,19 +177,19 @@ def train(model, args):
             init_state = torch.zeros(running_batch_size, args.state_size, device=args.device)
             init_belief = torch.rand(running_batch_size, args.belief_size, device=args.device)
 
+            observations = model.forward_flownet(x_img_list)
+
             (beliefs,
-             pred_rel_poses,
-             total_loss,
+             pred_rel_poses) = model.forward(observations,
+                                             x_imu_list,
+                                             y_rel_poses,
+                                             init_state,
+                                             init_belief)
+
+            (total_loss,
              pose_trans_loss_x,
              pose_trans_loss_y,
-             pose_rot_loss,
-             observation_loss,
-             observation_imu_loss,
-             kl_loss) = model.forward(x_img_list,
-                                      x_imu_list,
-                                      y_rel_pose_list,
-                                      init_state,
-                                      init_belief)
+             pose_rot_loss) = compute_loss(args, pred_rel_poses, y_rel_poses)
 
             optimizer.zero_grad()
             total_loss.backward()
@@ -211,7 +225,7 @@ def train(model, args):
             model.eval()
 
             # move eval directly here
-            with torch.no_grad():
+            with (((torch.no_grad()))):
                 print('----------------------------------------')
                 batch_timer = SequenceTimer()
                 last_batch_index = len(eval_clips) - 1
@@ -258,19 +272,18 @@ def train(model, args):
                     else:
                         beliefs = beliefs[1, :]
 
+                    observations = model.forward_flownet(x_img_list)
                     (beliefs,
-                     pred_rel_poses,
-                     total_loss,
+                     pred_rel_poses) =  model.forward(observations,
+                                                      x_imu_list,
+                                                      y_rel_poses,
+                                                      init_state,
+                                                      beliefs)
+
+                    (total_loss,
                      pose_trans_loss_x,
                      pose_trans_loss_y,
-                     pose_rot_loss,
-                     observation_loss,
-                     observation_imu_loss,
-                     kl_loss) =  model.forward(x_img_list,
-                                               x_imu_list,
-                                               y_rel_pose_list,
-                                               init_state,
-                                               beliefs)
+                     pose_rot_loss) = compute_loss(args, pred_rel_poses, y_rel_poses)
 
                     loss_avg['total_loss'].append(total_loss)
                     if model.use_info:
@@ -388,7 +401,7 @@ def train(model, args):
 def main():
     param = Param()
     args = param.get_args()
-    model = InfoOdometry(args)
+    model = OdometryModel(args)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)

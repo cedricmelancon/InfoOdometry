@@ -8,7 +8,7 @@ import glob
 from pathlib import Path
 import numpy as np
 
-from utils import StaticCenterCrop, ImageUtils
+from info_odometry.utils import StaticCenterCrop, ImageUtils
 import PIL
 from PIL import Image
 import torch

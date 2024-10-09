@@ -14,15 +14,15 @@ import random
 # from torch._six import int_classes as _int_classes
 from torchvision import transforms
 
-from utils.mit_file_io import read_mit_pose
-from utils.mit_file_io import read_mit_img
-from utils.mit_file_io import read_mit_imu
-from utils.mit_file_io import get_mit_imgpair
-from utils.mit_file_io import get_pose_by_timestamps
-from utils.mit_file_io import get_mit_depthpair
+from info_odometry.utils.mit_file_io import read_mit_pose
+from info_odometry.utils.mit_file_io import read_mit_img
+from info_odometry.utils.mit_file_io import read_mit_imu
+from info_odometry.utils.mit_file_io import get_mit_imgpair
+from info_odometry.utils.mit_file_io import get_pose_by_timestamps
+from info_odometry.utils.mit_file_io import get_mit_depthpair
 
-from utils import TransformUtils
-from utils import StaticCenterCrop
+from info_odometry.utils import TransformUtils
+from info_odometry.utils import StaticCenterCrop
 
 
 class MitStataCenterClipDataset(torch.utils.data.Dataset):

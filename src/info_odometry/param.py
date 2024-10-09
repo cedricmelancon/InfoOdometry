@@ -296,8 +296,10 @@ class Param:
             # backup codes
             pyfiles = [
                 '*.py',
-                'dataset/*.py',
-                'utils/*.py',
+                'info_odometry/flownet/*.py',
+                'info_odometry/modules/*.py',
+                'info_odometry/dataset/*.py',
+                'info_odometry/utils/*.py',
             ]
             os.mkdir('{}{}/src'.format(self.args.ckp_dir, self.args.exp_name))
             for pyfile in pyfiles:
