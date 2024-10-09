@@ -3,20 +3,20 @@ import torch.nn.functional as F
 from torch.distributions.kl import kl_divergence
 from torch.distributions import Normal
 
-from info_model import ObservationModel
-from seq_model import SeqVINet
-from info_model import SingleHiddenTransitionModel
-from info_model import DoubleHiddenTransitionModel
-from info_model import SingleHiddenVITransitionModel
-from info_model import DoubleHiddenVITransitionModel
-from info_model import MultiHiddenVITransitionModel
-from info_model import DoubleStochasticTransitionModel
-from info_model import DoubleStochasticVITransitionModel
-from info_model import PoseModel
-from info_model import Encoder
+from modules import ObservationModel
+from modules import SeqVINet
+from modules import SingleHiddenTransitionModel
+from modules import DoubleHiddenTransitionModel
+from modules import SingleHiddenVITransitionModel
+from modules import DoubleHiddenVITransitionModel
+from modules import MultiHiddenVITransitionModel
+from modules import DoubleStochasticTransitionModel
+from modules import DoubleStochasticVITransitionModel
+from modules import PoseModel
+from modules import Encoder
 from flownet_model import FlowNet2S
 
-from info_model import bottle
+from utils import ModelUtils
 
 
 class InfoOdometry:
@@ -106,7 +106,7 @@ class InfoOdometry:
             if self.args.img_prefeat == 'flownet':
                 observations = x_img_pairs
             else:
-                observations = bottle(self.flownet_model, (x_img_pairs,))
+                observations = ModelUtils.bottle(self.flownet_model, (x_img_pairs,))
 
         obs_size = observations.size()
         observations = observations.view(obs_size[0], obs_size[1], -1)
@@ -117,11 +117,11 @@ class InfoOdometry:
         if self.args.finetune_only_decoder:
             with (torch.no_grad()):
                 if self._use_imu:
-                    encode_observations = (bottle(self.encoder, (observations,)), x_imu_seqs)
+                    encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_seqs)
                 elif self.args.imu_only:
                     encode_observations = x_imu_seqs
                 else:
-                    encode_observations = bottle(self.encoder, (observations,))
+                    encode_observations = ModelUtils.bottle(self.encoder, (observations,))
 
                 args_transition = {
                     'prev_state': prev_state,  # not used if not use_info
@@ -142,11 +142,11 @@ class InfoOdometry:
                  posterior_std_devs) = self.transition_model(**args_transition)
         else:
             if self._use_imu:
-                encode_observations = (bottle(self.encoder, (observations,)), x_imu_seqs)
+                encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_seqs)
             elif self.args.imu_only:
                 encode_observations = x_imu_seqs
             else:
-                encode_observations = bottle(self.encoder, (observations,))
+                encode_observations = ModelUtils.bottle(self.encoder, (observations,))
 
             args_transition = {
                 'prev_state': prev_state,  # not used if not use_info
@@ -178,7 +178,7 @@ class InfoOdometry:
                                               posterior_means,
                                               posterior_std_devs)
 
-        pred_rel_poses = bottle(self.pose_model, (posterior_states,))
+        pred_rel_poses = ModelUtils.bottle(self.pose_model, (posterior_states,))
 
         pose_trans_loss_x = F.mse_loss(pred_rel_poses[:, :, :1] * self.args.translation_weight,
                                        y_rel_poses[:, :, :1] * self.args.translation_weight,
@@ -234,14 +234,18 @@ class InfoOdometry:
                 if self.args.finetune_only_decoder:
                     with torch.no_grad():
                         if self.args.rec_type == 'posterior':
-                            pred_observations = bottle(self.observation_model, (beliefs_visual, posterior_states,))
+                            pred_observations = ModelUtils.bottle(self.observation_model,
+                                                                  (beliefs_visual, posterior_states,))
                         elif self.args.rec_type == 'prior':
-                            pred_observations = bottle(self.observation_model, (beliefs_visual, prior_states,))
+                            pred_observations = ModelUtils.bottle(self.observation_model,
+                                                                  (beliefs_visual, prior_states,))
                 else:
                     if self.args.rec_type == 'posterior':
-                        pred_observations = bottle(self.observation_model, (beliefs_visual, posterior_states,))
+                        pred_observations = ModelUtils.bottle(self.observation_model,
+                                                              (beliefs_visual, posterior_states,))
                     elif self.args.rec_type == 'prior':
-                        pred_observations = bottle(self.observation_model, (beliefs_visual, prior_states,))
+                        pred_observations = ModelUtils.bottle(self.observation_model,
+                                                              (beliefs_visual, prior_states,))
 
                 if self.args.rec_loss == 'sum':
                     # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
@@ -264,14 +268,18 @@ class InfoOdometry:
                 if self.args.finetune_only_decoder:
                     with torch.no_grad():
                         if self.args.rec_type == 'posterior':
-                            pred_imu_observations = bottle(self.observation_imu_model, (beliefs[1], posterior_states,))
+                            pred_imu_observations = ModelUtils.bottle(self.observation_imu_model,
+                                                                      (beliefs[1], posterior_states,))
                         elif self.args.rec_type == 'prior':
-                            pred_imu_observations = bottle(self.observation_imu_model, (beliefs[1], prior_states,))
+                            pred_imu_observations = ModelUtils.bottle(self.observation_imu_model,
+                                                                      (beliefs[1], prior_states,))
                 else:
                     if self.args.rec_type == 'posterior':
-                        pred_imu_observations = bottle(self.observation_imu_model, (beliefs[1], posterior_states,))
+                        pred_imu_observations = ModelUtils.bottle(self.observation_imu_model,
+                                                                  (beliefs[1], posterior_states,))
                     elif self.args.rec_type == 'prior':
-                        pred_imu_observations = bottle(self.observation_imu_model, (beliefs[1], prior_states,))
+                        pred_imu_observations = ModelUtils.bottle(self.observation_imu_model,
+                                                                  (beliefs[1], prior_states,))
 
                 if self.args.rec_loss == 'sum':
                     # might be too large -> if so: .mean(dim=2).mean(dim=(0,1)) instead
@@ -444,8 +452,8 @@ class InfoOdometry:
         self.encoder.load_state_dict(model_dicts["encoder"], strict=True)
 
         optimizer_dict = None
-        if not self.args.finetune:
-            optimizer_dict = model_dicts["optimizer"]
+        #if not self.args.finetune:
+            #optimizer_dict = model_dicts["optimizer"]
 
         return optimizer_dict
 

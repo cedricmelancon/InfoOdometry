@@ -155,3 +155,52 @@ class ModelUtils:
                 break
             idx += 1
         return tmp_lr_factors[idx]
+
+    # Wraps the input tuple for a function to process a time x batch x features sequence
+    # in batch x features (assumes one output)
+    @staticmethod
+    def bottle(f, x_tuple):
+        # f: flownet
+        # e.g. x_tuple: (x_img_list, ) -> x_img_list: [time, batch, 3, 2, H, W]
+        x_sizes = tuple(map(lambda x: x.size(), x_tuple))  # ([time, batch, 3, 2, H, W], )
+        # process the size reshape for each tensor in x_tuple
+        # the new batch_size = time x the old batch_size
+        y = f(*map(lambda x: x[0].view(x[1][0] * x[1][1], *x[1][2:]),
+              zip(x_tuple, x_sizes)))  # f([time x batch, 3, 2, H, W])
+        if type(y) == tuple:
+            y_size = y[0].size()
+            return [_y.view(x_sizes[0][0], x_sizes[0][1], *y_size[1:]) for _y in y]
+        else:
+            y_size = y.size()
+            # reshape the output into time x the old batch_size x features
+            return y.view(x_sizes[0][0], x_sizes[0][1], *y_size[1:])
+
+    @staticmethod
+    def img_conv(batch_norm, in_planes, out_planes, kernel_size=3, stride=1):
+        if batch_norm:
+            return nn.Sequential(
+                nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=(kernel_size - 1) // 2,
+                          bias=False),
+                nn.BatchNorm2d(out_planes),
+                nn.ReLU(inplace=True)
+                # nn.LeakyReLU(0.1, inplace=True)
+            )
+        else:
+            return nn.Sequential(
+                nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=(kernel_size - 1) // 2,
+                          bias=True),
+                nn.ReLU(inplace=True)
+                # nn.LeakyReLU(0.1, inplace=True)
+            )
+
+    @staticmethod
+    def img_upconv(batch_norm, in_planes, out_planes):
+        if batch_norm:
+            return nn.Sequential(
+                nn.ConvTranspose2d(in_planes, out_planes, kernel_size=4, stride=2, padding=1),
+                nn.BatchNorm2d(out_planes),
+                nn.ReLU(inplace=True))
+        else:
+            return nn.Sequential(
+                nn.ConvTranspose2d(in_planes, out_planes, kernel_size=4, stride=2, padding=1),
+                nn.ReLU(inplace=True))

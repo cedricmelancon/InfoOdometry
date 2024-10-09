@@ -31,7 +31,7 @@ class Param:
         self.parser.add_argument('--transition_model', type=str, default='single',
                                  help='single, double, single-vinet, multi-vinet, deepvo, deepvio')
         self.parser.add_argument('--rec_type', type=str, default='posterior', help='posterior or prior')
-        self.parser.add_argument('--imu_rnn', type=str, default='lstm', help='gru or lstm')
+        self.parser.add_argument('--imu_rnn', type=str, default='gru', help='gru or lstm')
         self.parser.add_argument('--eval_uncertainty', action='store_const', default=False, const=True)
         self.parser.add_argument('--uncertainty_groups', type=int, default=1, help='1, 2')
         self.parser.add_argument('--kl_free_nats', type=str, default='max', help='none, min, max')
@@ -40,7 +40,7 @@ class Param:
                                  help='kl weight for posterior and prior states in the world model')
         self.parser.add_argument('--global_kl_beta', type=float, default=0, help='global kl weight (0 to disable)')
         self.parser.add_argument('--eval_ckp', type=str, default='best', help='best, last')
-        self.parser.add_argument('--translation_weight', type=float, default=2000, help='weight for translation_loss')
+        self.parser.add_argument('--translation_weight', type=float, default=1000, help='weight for translation_loss')
         self.parser.add_argument('--rotation_weight', type=float, default=5000, help='weight for rotation_loss')
 
         # for soft / hard deepvio baselines
@@ -63,7 +63,7 @@ class Param:
                                  help='model activation function')
         self.parser.add_argument('--embedding_size', type=int, default=1024, help='observation embedding size')
         self.parser.add_argument('--hidden_size', type=int, default=1024, help='hidden size')
-        self.parser.add_argument('--belief_size', type=int, default=1024, help='belief/hidden size')
+        self.parser.add_argument('--belief_size', type=int, default=512, help='belief/hidden size')
         self.parser.add_argument('--belief_rnn', type=str, default='lstm', help='lstm or gru')
         self.parser.add_argument('--state_size', type=int, default=1024, help='state/latent size')
         self.parser.add_argument('--batch_size', type=int, default=64, help='batch size')
@@ -82,7 +82,7 @@ class Param:
         self.parser.add_argument('--grad_clip_norm', type=float, default=1500, help='gradient clipping norm')
         self.parser.add_argument('--rec_loss', type=str, default='mean', choices=["sum", "mean"],
                                  help='observation reconstruction loss type: sum or mean')
-        self.parser.add_argument('--load_model', type=str, default='none',
+        self.parser.add_argument('--load_model', type=str, default='/data/results/ckp/ckp_best-eval-loss.pt',
                                  help='path for pre-saved models (.pt file) to load')
 
         # args for using FlowNet2/C/S pretrained features

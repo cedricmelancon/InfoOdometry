@@ -23,7 +23,6 @@ from utils import ScheduledOptimizer
 
 from param import Param
 from dataset.mit_stata_center_dataset import load_mit_clips
-from info_model import bottle
 from info_odometry import InfoOdometry
 
 from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau

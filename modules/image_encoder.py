@@ -2,17 +2,20 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+
 def img_conv(batch_norm, in_planes, out_planes, kernel_size=3, stride=1):
     if batch_norm:
         return nn.Sequential(
-            nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=(kernel_size-1)//2, bias=False),
+            nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=(kernel_size - 1) // 2,
+                      bias=False),
             nn.BatchNorm2d(out_planes),
             nn.LeakyReLU(inplace=True)
             # nn.LeakyReLU(0.1, inplace=True)
         )
     else:
         return nn.Sequential(
-            nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=(kernel_size-1)//2, bias=True),
+            nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=(kernel_size - 1) // 2,
+                      bias=True),
             nn.LeakyReLU(inplace=True)
             # nn.LeakyReLU(0.1, inplace=True)
         )
@@ -30,7 +33,6 @@ class ImgEncoder(nn.Module):
         self.conv5 = img_conv(self.batch_norm, 128, 256, kernel_size=3, stride=2)
         self.conv6 = img_conv(self.batch_norm, 256, 256, kernel_size=3, stride=2)
         self.conv7 = img_conv(self.batch_norm, 256, 256, kernel_size=3, stride=2)
-    
 
     def forward(self, img_pair):
         """
