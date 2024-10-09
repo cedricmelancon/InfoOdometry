@@ -1,10 +1,10 @@
 pytz
-torch
+#torch
 tensorboard
 tensorboardX
 sympy
 pybind11
-numpy
+numpy < 1.25
 numpy-quaternion
 numba
 scipy
@@ -16,7 +16,7 @@ cffi
 pillow
 pyquaternion
 quaternion
-transforms3d
-torchvision
+#transforms3d
+#torchvision
 pandas
 matplotlib
