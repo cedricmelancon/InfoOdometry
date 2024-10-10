@@ -109,6 +109,93 @@ class SeqVINet(nn.Module):
                         start, end = n // 4, n // 2
                         bias.data[start:end].fill_(10.)
 
+        # Operates over (previous) state, (previous) poses, (previous) belief, (previous) nonterminals (mask), and (current) observations
+        # Diagram of expected inputs and outputs for T = 5 (-x- signifying beginning of output belief/state that gets sliced off):
+        # t :  0  1  2  3  4  5
+        # o :    -X--X--X--X--X-
+        # p : -X--X--X--X--X-
+        # n : -X--X--X--X--X-
+        # pb: -X-
+        # ps: -X-
+        # b : -x--X--X--X--X--X-
+        # s : -x--X--X--X--X--X-
+        # @jit.script_method
+        def step(self,
+                 prev_state,
+                 poses,
+                 prev_belief,
+                 observations,
+                 rnn_embed_imu_hiddens,
+                 fusion_lstm_hiddens,
+                 gumbel_temperature=0.5):
+            """
+            prev_state: not used (for code consistency in main.py)
+            prev_belief: i.e. prev_hidden (for code consistency in main.py)
+            gumbel_temperature: the default value 0.5 is used for evaluation
+            """
+            if self.use_imu:
+                observations_visual = observations[0]  # [batch, 1024]
+                observations_imu = observations[1]  # [batch, 11, 6]
+
+            fusion_features = prev_belief
+            #fusion_hiddens, fusion_features, out_features = prev_belief, prev_belief, torch.empty(0)
+
+            # if self.args.belief_rnn == 'lstm':
+            #     fusion_lstm_hiddens = (prev_belief.unsqueeze(0).repeat(2, 1, 1),
+            #                            prev_belief.unsqueeze(0).repeat(2, 1, 1))
+
+            # if self.use_imu:
+            #     rnn_embed_imu_hiddens = [(torch.empty(0))]
+            #     prev_rnn_embed_imu_hidden = torch.zeros(2, 1, self.args.embedding_size, device=self.args.device)
+            #     if self.args.imu_rnn == 'lstm':
+            #         rnn_embed_imu_hiddens[0] = (prev_rnn_embed_imu_hidden, prev_rnn_embed_imu_hidden)
+            #     elif self.args.imu_rnn == 'gru':
+            #         rnn_embed_imu_hiddens[0] = prev_rnn_embed_imu_hidden
+
+            if self.use_imu:
+                hidden, rnn_embed_imu_hiddens = self.rnn_embed_imu(observations_imu,
+                                                                   rnn_embed_imu_hiddens)
+
+                fused_feat = torch.cat([observations_visual, hidden], dim=1)
+                if self.use_soft:
+                    soft_mask_img = self.sigmoid(self.soft_fc_img(fused_feat))
+                    soft_mask_imu = self.sigmoid(self.soft_fc_imu(fused_feat))
+                    soft_mask = torch.ones_like(fused_feat).to(device=self.args.device)
+                    soft_mask[:, :self.embedding_size] = soft_mask_img
+                    soft_mask[:, self.embedding_size:] = soft_mask_imu
+                    fused_feat = fused_feat * soft_mask
+                if self.use_hard:
+                    prob_img = self.sigmoid(self.hard_fc_img(fused_feat))
+                    prob_imu = self.sigmoid(self.hard_fc_imu(fused_feat))
+                    hard_mask_img = self.gumbel_sigmoid(prob_img, gumbel_temperature)
+                    hard_mask_imu = self.gumbel_sigmoid(prob_imu, gumbel_temperature)
+                    hard_mask_img = hard_mask_img[:, :, 0]
+                    hard_mask_imu = hard_mask_imu[:, :, 0]
+                    hard_mask = torch.ones_like(fused_feat).to(device=self.args.device)
+                    hard_mask[:, :self.embedding_size] = hard_mask_img
+                    hard_mask[:, self.embedding_size:] = hard_mask_imu
+                    fused_feat = fused_feat * hard_mask
+
+                hidden = self.act_fn(self.dropout(self.fc_embed_sensors(fused_feat), 0.5))
+            else:
+                hidden = self.act_fn(self.dropout(self.fc_embed_sensors(observations[t_ + 1]), 0.5))
+
+            if self.args.belief_rnn == 'gru':
+                fusion_features = self.rnn_fusion(hidden, fusion_features)
+            elif self.args.belief_rnn == 'lstm':
+                hidden = hidden.unsqueeze(1)
+                fusion_feature_rnn, fusion_lstm_hiddens = self.rnn_fusion(hidden, fusion_lstm_hiddens)
+                fusion_features = fusion_feature_rnn.squeeze(1)
+            hidden = self.act_fn(self.dropout(self.fc_embed_fusion(fusion_features), 0.6))
+            out_features = self.fc_out_fusion(hidden)
+
+            hidden = [fusion_features,
+                      out_features,
+                      rnn_embed_imu_hiddens,
+                      fusion_lstm_hiddens]
+
+            return hidden
+
     # Operates over (previous) state, (previous) poses, (previous) belief, (previous) nonterminals (mask), and (current) observations
     # Diagram of expected inputs and outputs for T = 5 (-x- signifying beginning of output belief/state that gets sliced off):
     # t :  0  1  2  3  4  5

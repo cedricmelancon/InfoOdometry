@@ -23,6 +23,8 @@ from info_odometry.utils.model_utils import ModelUtils
 
 class OdometryModel:
     def __init__(self, args):
+        self.rnn_embed_imu_hiddens = None
+        self.fusion_lstm_hiddens = None
         self.step_tau = None
         self.gumbel_tau = None
         self.anneal_epochs = None
@@ -52,6 +54,7 @@ class OdometryModel:
 
             # allowed deviation in kl divergence
             self._free_nats = torch.full((1,), self.args.free_nats, device=self.args.device)
+
 
         # gumbel temperature for hard deepvio
         if self.args.hard:
@@ -108,6 +111,65 @@ class OdometryModel:
         observations = observations.view(obs_size[0], obs_size[1], -1)
 
         return observations
+
+    def step(self, x_img_pairs, x_imu_seqs, prev_beliefs):
+        start_time = time.perf_counter()
+
+        if self.fusion_lstm_hiddens is None:
+            self.fusion_lstm_hiddens = (prev_belief.unsqueeze(0).repeat(2, 1, 1),
+                                   prev_belief.unsqueeze(0).repeat(2, 1, 1))
+
+        if self.rnn_embed_imu_hiddens is None:
+            prev_rnn_embed_imu_hidden = torch.zeros(2, 1, self.args.embedding_size, device=self.args.device)
+            if self.args.imu_rnn == 'lstm':
+                self.rnn_embed_imu_hiddens = (prev_rnn_embed_imu_hidden, prev_rnn_embed_imu_hidden)
+            elif self.args.imu_rnn == 'gru':
+                self.rnn_embed_imu_hiddens = prev_rnn_embed_imu_hidden
+
+        if self._use_imu:
+            encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_seqs)
+        elif self.args.imu_only:
+            encode_observations = x_imu_seqs
+        else:
+            encode_observations = ModelUtils.bottle(self.encoder, (observations,))
+
+        encoder_time = time.perf_counter()
+
+        args_transition = {
+            'prev_state': None,  # prev_state,  # not used if not use_info
+            'poses': None,  # y_rel_poses,  # not used if not use_info during training
+            'prev_belief': prev_beliefs,
+            'observations': encode_observations,
+            'rnn_embed_imu_hiddens': self.rnn_embed_imu_hiddens,
+            'fusion_lstm_hiddens': self.fusion_lstm_hiddens
+        }
+
+        if self.args.hard:
+            args_transition['gumbel_temperature'] = self.gumbel_tau
+
+        (beliefs,
+         posterior_states,
+         self.rnn_embed_imu_hiddens,
+         self.fusion_lstm_hiddens) = self.transition_model(**args_transition)
+
+        transition_time = time.perf_counter()
+        # (pred_observations,
+        #  pred_imu_observations) = self._forward_observation(beliefs,
+        #                                                     posterior_states,
+        #                                                     prior_states,
+        #                                                     prior_means,
+        #                                                     prior_std_devs,
+        #                                                     observations,
+        #                                                     x_imu_seqs,
+        #                                                     posterior_means,
+        #                                                     posterior_std_devs)
+
+        pred_rel_poses = ModelUtils.bottle(self.pose_model, (posterior_states,))
+        pose_time = time.perf_counter()
+        timing = [encoder_time - start_time, transition_time - encoder_time, pose_time - transition_time]
+        return (beliefs,
+                pred_rel_poses,
+                timing)
 
     def forward_full(self, x_img_pairs, x_imu_seqs, prev_beliefs):
         start_time = time.perf_counter()
