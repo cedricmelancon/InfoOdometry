@@ -28,7 +28,7 @@ class Param:
         self.parser.add_argument('--world_kl_out', action='store_const', default=False, const=True)
 
         # args for uncertainty measurement
-        self.parser.add_argument('--transition_model', type=str, default='single',
+        self.parser.add_argument('--transition_model', type=str, default='deepvio',
                                  help='single, double, single-vinet, multi-vinet, deepvo, deepvio')
         self.parser.add_argument('--rec_type', type=str, default='posterior', help='posterior or prior')
         self.parser.add_argument('--imu_rnn', type=str, default='gru', help='gru or lstm')
@@ -128,7 +128,7 @@ class Param:
                                  help='the frequency (by epoch) to eval and save the ckp')
 
         # args for dataset
-        self.parser.add_argument('--dataset', type=str, default='euroc', choices=["kitti", "mit", "euroc", "vkitti2"],
+        self.parser.add_argument('--dataset', type=str, default='mit', choices=["kitti", "mit", "euroc", "vkitti2"],
                                  help='euroc, kitti (determine base_dir, train/eval_sequences')
         self.parser.add_argument('--base_dir', type=str, default='/data', help='should not be specified')
         self.parser.add_argument('--train_sequences', type=str,
@@ -157,7 +157,7 @@ class Param:
                                  help="Load 10/100Hz and interpolate the predicted pose to 20/200Hz")
 
         # args for directories of ckp and tb
-        self.parser.add_argument('--exp_name', type=str, default='/data/results/tmp')
+        self.parser.add_argument('--exp_name', type=str, default='XXX')
         self.parser.add_argument('--ckp_dir', type=str, default='/data/results/ckp/')
         self.parser.add_argument('--tb_dir', type=str, default='/data/results/tb_dir/')
 

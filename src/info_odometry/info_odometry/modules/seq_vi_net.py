@@ -158,6 +158,7 @@ class SeqVINet(nn.Module):
             if self.use_imu:
                 hidden, rnn_embed_imu_hiddens[t + 1] = self.rnn_embed_imu(observations_imu[t_ + 1],
                                                                           rnn_embed_imu_hiddens[t])
+
                 fused_feat = torch.cat([observations_visual[t_ + 1], hidden[:, -1, :]], dim=1)
                 if self.use_soft:
                     soft_mask_img = self.sigmoid(self.soft_fc_img(fused_feat))

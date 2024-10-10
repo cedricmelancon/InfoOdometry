@@ -29,3 +29,5 @@ src/info_odometry/info_odometry/flownet/resample2d_package/dist/
 build/
 
 install/
+
+monitoring.csv

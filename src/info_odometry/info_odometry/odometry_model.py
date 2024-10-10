@@ -3,20 +3,22 @@ import torch.nn.functional as F
 from torch.distributions.kl import kl_divergence
 from torch.distributions import Normal
 
-from info_odometry.modules import ObservationModel
-from info_odometry.modules import SeqVINet
-from info_odometry.modules import SingleHiddenTransitionModel
-from info_odometry.modules import DoubleHiddenTransitionModel
-from info_odometry.modules import SingleHiddenVITransitionModel
-from info_odometry.modules import DoubleHiddenVITransitionModel
-from info_odometry.modules import MultiHiddenVITransitionModel
-from info_odometry.modules import DoubleStochasticTransitionModel
-from info_odometry.modules import DoubleStochasticVITransitionModel
-from info_odometry.modules import PoseModel
-from info_odometry.modules import Encoder
+import time
+
+from info_odometry.modules.observation_model import ObservationModel
+from info_odometry.modules.seq_vi_net import SeqVINet
+from info_odometry.modules.single_hidden_transition_model import SingleHiddenTransitionModel
+from info_odometry.modules.double_hidden_transition_model import DoubleHiddenTransitionModel
+from info_odometry.modules.single_hidden_vi_transition_model import SingleHiddenVITransitionModel
+from info_odometry.modules.double_hidden_vi_transition_model import DoubleHiddenVITransitionModel
+from info_odometry.modules.multi_hidden_vi_transition_model import MultiHiddenVITransitionModel
+from info_odometry.modules.double_stochastic_transition_model import DoubleStochasticTransitionModel
+from info_odometry.modules.double_stochastic_vi_transition_model import DoubleStochasticVITransitionModel
+from info_odometry.modules.pose_model import PoseModel
+from info_odometry.modules.encoder import Encoder
 from info_odometry.flownet_model import FlowNet2S
 
-from info_odometry.utils import ModelUtils
+from info_odometry.utils.model_utils import ModelUtils
 
 
 class OdometryModel:
@@ -89,61 +91,10 @@ class OdometryModel:
         if self.observation_imu_model:
             self.observation_imu_model.eval()
 
-    def eval_flownet(self, eval_flownet_model):
-        # if we use flownet_feature as reconstructed observations -> no need for de-quantization
-        with torch.no_grad():
-            # [time, batch, out_conv6_1] e.g. [5, 16, 1024, 5, 19]
-            observations = x_img_pairs if self.args.img_prefeat == 'flownet' else bottle(self.flownet_model,
-                                                                                         (x_img_pairs,))
-        return observations
-
-    def step_model(self, observations, x_imu_seqs):
-        if not self.initialized:
-            self.eval()
-            self.rnn_embed_imu_hiddens, \
-                self.fusion_lstm_hiddens, \
-                self.fusion_features, \
-                self.out_features = self.transition_model.init_data(self.pose_model,
-                                                                    torch.rand(1, self.args.belief_size,
-                                                                               device=self.args.device))
-            self.index = 0
-            self.initialized = True
-
-        pred_rel_poses = None
-        with torch.no_grad():
-            start_time = time.perf_counter()
-
-            obs_size = observations.size()
-            observations = observations.view(obs_size[0], obs_size[1], -1)
-
-            encode_observations = (self.encoder(observations), x_imu_seqs)
-            encoder_time = time.perf_counter()
-
-            self.rnn_embed_imu_hiddens, \
-                self.fusion_lstm_hiddens, \
-                self.fusion_features, \
-                self.out_features[self.index] = self.transition_model.execute_model(self.rnn_embed_imu_hiddens,
-                                                                                    encode_observations[1],
-                                                                                    encode_observations[0],
-                                                                                    self.fusion_features,
-                                                                                    self.fusion_lstm_hiddens,
-                                                                                    self.index)
-            transition_time = time.perf_counter()
-            timing = None
-
-            if self.index == self.clip_length - 1:
-                pred_rel_poses = self.pose_model(self.out_features[self.index])
-                pose_time = time.perf_counter()
-                timing = [encoder_time - start_time, transition_time - encoder_time, pose_time - transition_time]
-
-        if self.index < self.clip_length - 1:
-            self.index += 1
-        return pred_rel_poses, timing
-
-    def forward_flownet(self, x_img_list):
+    def forward_flownet(self, x_img_pairs):
         # [time, batch, 3, 2, H, W]
-        x_img_pairs = torch.stack(x_img_list, dim=0).type(torch.FloatTensor).to(device=self.args.device)
-        self._running_batch_size = x_img_pairs.size()[1]  # might be different for the last batch
+        #x_img_pairs = torch.stack(x_img_list, dim=0).type(torch.FloatTensor).to(device=self.args.device)
+        #self._running_batch_size = x_img_pairs.size()[1]  # might be different for the last batch
 
         # if we use flownet_feature as reconstructed observations -> no need for dequantization
         with torch.no_grad():
@@ -158,75 +109,73 @@ class OdometryModel:
 
         return observations
 
-    def compute_loss(self):
-        pass
-
-    def forward(self,
-                observations,
-                x_imu_list,
-                y_rel_poses,
-                prev_state,
-                prev_beliefs):
-
-        if self._use_imu or self.args.imu_only:
-            # [time, batch, 11, 6]
-            x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=self.args.device)
+    def forward_full(self, x_img_pairs, x_imu_seqs, prev_beliefs):
+        start_time = time.perf_counter()
+        # if self._use_imu or self.args.imu_only:
+        # [time, batch, 11, 6]
+        # x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=self.args.device)
+        observations = ModelUtils.bottle(self.flownet_model, (x_img_pairs,))
+        obs_size = observations.size()
+        observations = observations.view(obs_size[0], obs_size[1], -1)
 
         # update belief/state using posterior from previous belief/state, previous pose and current
         # observation (over entire sequence at once)
         # output: [time, ] with init states already removed
-        if self.args.finetune_only_decoder:
-            with (torch.no_grad()):
-                if self._use_imu:
-                    encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_seqs)
-                elif self.args.imu_only:
-                    encode_observations = x_imu_seqs
-                else:
-                    encode_observations = ModelUtils.bottle(self.encoder, (observations,))
-
-                args_transition = {
-                    'prev_state': prev_state,  # not used if not use_info
-                    'poses': y_rel_poses,  # not used if not use_info during training
-                    'prev_belief': prev_beliefs,
-                    'observations': encode_observations
-                }
-
-                if self.args.hard:
-                    args_transition['gumbel_temperature'] = self.gumbel_tau
-
-                (beliefs,
-                 prior_states,
-                 prior_means,
-                 prior_std_devs,
-                 posterior_states,
-                 posterior_means,
-                 posterior_std_devs) = self.transition_model(**args_transition)
+        # if self.args.finetune_only_decoder:
+        #     with (torch.no_grad()):
+        #         if self._use_imu:
+        #             encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_seqs)
+        #         elif self.args.imu_only:
+        #             encode_observations = x_imu_seqs
+        #         else:
+        #             encode_observations = ModelUtils.bottle(self.encoder, (observations,))
+        #
+        #         args_transition = {
+        #             'prev_state': prev_state,  # not used if not use_info
+        #             'poses': y_rel_poses,  # not used if not use_info during training
+        #             'prev_belief': prev_beliefs,
+        #             'observations': encode_observations
+        #         }
+        #
+        #         if self.args.hard:
+        #             args_transition['gumbel_temperature'] = self.gumbel_tau
+        #
+        #         (beliefs,
+        #          prior_states,
+        #          prior_means,
+        #          prior_std_devs,
+        #          posterior_states,
+        #          posterior_means,
+        #          posterior_std_devs) = self.transition_model(**args_transition)
+        # else:
+        if self._use_imu:
+            encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_seqs)
+        elif self.args.imu_only:
+            encode_observations = x_imu_seqs
         else:
-            if self._use_imu:
-                encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_seqs)
-            elif self.args.imu_only:
-                encode_observations = x_imu_seqs
-            else:
-                encode_observations = ModelUtils.bottle(self.encoder, (observations,))
+            encode_observations = ModelUtils.bottle(self.encoder, (observations,))
 
-            args_transition = {
-                'prev_state': prev_state,  # not used if not use_info
-                'poses': y_rel_poses,  # not used if not use_info during training
-                'prev_belief': prev_beliefs,
-                'observations': encode_observations
-            }
+        encoder_time = time.perf_counter()
 
-            if self.args.hard:
-                args_transition['gumbel_temperature'] = self.gumbel_tau
+        args_transition = {
+            'prev_state': None,  # prev_state,  # not used if not use_info
+            'poses': None,  # y_rel_poses,  # not used if not use_info during training
+            'prev_belief': prev_beliefs,
+            'observations': encode_observations
+        }
 
-            (beliefs,
-             prior_states,
-             prior_means,
-             prior_std_devs,
-             posterior_states,
-             posterior_means,
-             posterior_std_devs) = self.transition_model(**args_transition)
+        if self.args.hard:
+            args_transition['gumbel_temperature'] = self.gumbel_tau
 
+        (beliefs,
+         prior_states,
+         prior_means,
+         prior_std_devs,
+         posterior_states,
+         posterior_means,
+         posterior_std_devs) = self.transition_model(**args_transition)
+
+        transition_time = time.perf_counter()
         # (pred_observations,
         #  pred_imu_observations) = self._forward_observation(beliefs,
         #                                                     posterior_states,
@@ -239,9 +188,93 @@ class OdometryModel:
         #                                                     posterior_std_devs)
 
         pred_rel_poses = ModelUtils.bottle(self.pose_model, (posterior_states,))
-
+        pose_time = time.perf_counter()
+        timing = [encoder_time - start_time, transition_time - encoder_time, pose_time - transition_time]
         return (beliefs,
-                pred_rel_poses)
+                pred_rel_poses,
+                timing)
+
+    def forward(self, observations, x_imu_seqs, prev_beliefs):
+        start_time = time.perf_counter()
+        #if self._use_imu or self.args.imu_only:
+            # [time, batch, 11, 6]
+            #x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=self.args.device)
+
+        # update belief/state using posterior from previous belief/state, previous pose and current
+        # observation (over entire sequence at once)
+        # output: [time, ] with init states already removed
+        # if self.args.finetune_only_decoder:
+        #     with (torch.no_grad()):
+        #         if self._use_imu:
+        #             encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_seqs)
+        #         elif self.args.imu_only:
+        #             encode_observations = x_imu_seqs
+        #         else:
+        #             encode_observations = ModelUtils.bottle(self.encoder, (observations,))
+        #
+        #         args_transition = {
+        #             'prev_state': prev_state,  # not used if not use_info
+        #             'poses': y_rel_poses,  # not used if not use_info during training
+        #             'prev_belief': prev_beliefs,
+        #             'observations': encode_observations
+        #         }
+        #
+        #         if self.args.hard:
+        #             args_transition['gumbel_temperature'] = self.gumbel_tau
+        #
+        #         (beliefs,
+        #          prior_states,
+        #          prior_means,
+        #          prior_std_devs,
+        #          posterior_states,
+        #          posterior_means,
+        #          posterior_std_devs) = self.transition_model(**args_transition)
+        # else:
+        if self._use_imu:
+            encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_seqs)
+        elif self.args.imu_only:
+            encode_observations = x_imu_seqs
+        else:
+            encode_observations = ModelUtils.bottle(self.encoder, (observations,))
+
+        encoder_time = time.perf_counter()
+
+        args_transition = {
+            'prev_state': None,  # prev_state,  # not used if not use_info
+            'poses': None,  # y_rel_poses,  # not used if not use_info during training
+            'prev_belief': prev_beliefs,
+            'observations': encode_observations
+        }
+
+        if self.args.hard:
+            args_transition['gumbel_temperature'] = self.gumbel_tau
+
+        (beliefs,
+         prior_states,
+         prior_means,
+         prior_std_devs,
+         posterior_states,
+         posterior_means,
+         posterior_std_devs) = self.transition_model(**args_transition)
+
+        transition_time = time.perf_counter()
+        # (pred_observations,
+        #  pred_imu_observations) = self._forward_observation(beliefs,
+        #                                                     posterior_states,
+        #                                                     prior_states,
+        #                                                     prior_means,
+        #                                                     prior_std_devs,
+        #                                                     observations,
+        #                                                     x_imu_seqs,
+        #                                                     posterior_means,
+        #                                                     posterior_std_devs)
+
+        pred_rel_poses = ModelUtils.bottle(self.pose_model, (posterior_states,))
+        pose_time = time.perf_counter()
+        timing = [encoder_time - start_time, transition_time - encoder_time, pose_time - transition_time]
+        return (beliefs,
+                pred_rel_poses,
+                timing)
 
     # def _compute_observation_loss(self, pred_observations, observations, pred_imu_observations, x_imu_seqs):
     #     observation_loss = None

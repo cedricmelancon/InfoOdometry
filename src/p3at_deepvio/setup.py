@@ -20,6 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'p3at_deepvio = p3at_deepvio.p3at_deepvio:main',
         ],
     },
 )

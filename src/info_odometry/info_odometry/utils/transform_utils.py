@@ -118,7 +118,7 @@ class TransformUtils:
 
         transform_result = np.dot(transform_state, transform_dt)
 
-        euler_result = np.flip(R.from_matrix(transform_result[:3, :3]).as_euler('zyx'), 0)
+        euler_result = np.flip(R.from_matrix(transform_result[:3, :3]).as_quat(), 0)
         trans_result = transform_result[:3, 3]
         euler_result[0] = 0.0
         euler_result[1] = 0.0
