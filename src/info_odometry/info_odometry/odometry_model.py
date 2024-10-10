@@ -112,12 +112,12 @@ class OdometryModel:
 
         return observations
 
-    def step(self, x_img_pairs, x_imu_seqs, prev_beliefs):
+    def step(self, observations, x_imu_seqs, prev_beliefs):
         start_time = time.perf_counter()
 
         if self.fusion_lstm_hiddens is None:
-            self.fusion_lstm_hiddens = (prev_belief.unsqueeze(0).repeat(2, 1, 1),
-                                   prev_belief.unsqueeze(0).repeat(2, 1, 1))
+            self.fusion_lstm_hiddens = (prev_beliefs.unsqueeze(0).repeat(2, 1, 1),
+                                        prev_beliefs.unsqueeze(0).repeat(2, 1, 1))
 
         if self.rnn_embed_imu_hiddens is None:
             prev_rnn_embed_imu_hidden = torch.zeros(2, 1, self.args.embedding_size, device=self.args.device)
@@ -127,11 +127,11 @@ class OdometryModel:
                 self.rnn_embed_imu_hiddens = prev_rnn_embed_imu_hidden
 
         if self._use_imu:
-            encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_seqs)
+            encode_observations = (self.encoder(observations), x_imu_seqs)
         elif self.args.imu_only:
             encode_observations = x_imu_seqs
         else:
-            encode_observations = ModelUtils.bottle(self.encoder, (observations,))
+            encode_observations = self.encoder(observations)
 
         encoder_time = time.perf_counter()
 
@@ -150,7 +150,7 @@ class OdometryModel:
         (beliefs,
          posterior_states,
          self.rnn_embed_imu_hiddens,
-         self.fusion_lstm_hiddens) = self.transition_model(**args_transition)
+         self.fusion_lstm_hiddens) = self.transition_model.step(**args_transition)
 
         transition_time = time.perf_counter()
         # (pred_observations,
@@ -164,7 +164,7 @@ class OdometryModel:
         #                                                     posterior_means,
         #                                                     posterior_std_devs)
 
-        pred_rel_poses = ModelUtils.bottle(self.pose_model, (posterior_states,))
+        pred_rel_poses = self.pose_model(posterior_states)
         pose_time = time.perf_counter()
         timing = [encoder_time - start_time, transition_time - encoder_time, pose_time - transition_time]
         return (beliefs,
@@ -258,42 +258,9 @@ class OdometryModel:
 
     def forward(self, observations, x_imu_seqs, prev_beliefs):
         start_time = time.perf_counter()
-        #if self._use_imu or self.args.imu_only:
-            # [time, batch, 11, 6]
-            #x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=self.args.device)
 
-        # update belief/state using posterior from previous belief/state, previous pose and current
-        # observation (over entire sequence at once)
-        # output: [time, ] with init states already removed
-        # if self.args.finetune_only_decoder:
-        #     with (torch.no_grad()):
-        #         if self._use_imu:
-        #             encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_seqs)
-        #         elif self.args.imu_only:
-        #             encode_observations = x_imu_seqs
-        #         else:
-        #             encode_observations = ModelUtils.bottle(self.encoder, (observations,))
-        #
-        #         args_transition = {
-        #             'prev_state': prev_state,  # not used if not use_info
-        #             'poses': y_rel_poses,  # not used if not use_info during training
-        #             'prev_belief': prev_beliefs,
-        #             'observations': encode_observations
-        #         }
-        #
-        #         if self.args.hard:
-        #             args_transition['gumbel_temperature'] = self.gumbel_tau
-        #
-        #         (beliefs,
-        #          prior_states,
-        #          prior_means,
-        #          prior_std_devs,
-        #          posterior_states,
-        #          posterior_means,
-        #          posterior_std_devs) = self.transition_model(**args_transition)
-        # else:
         if self._use_imu:
-            encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_seqs)
+            encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_cseqs)
         elif self.args.imu_only:
             encode_observations = x_imu_seqs
         else:

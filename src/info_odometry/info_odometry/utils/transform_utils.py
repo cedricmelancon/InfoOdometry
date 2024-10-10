@@ -70,7 +70,7 @@ class TransformUtils:
             yaw / 2)
         qz = np.cos(roll / 2) * np.cos(pitch / 2) * np.sin(yaw / 2) - np.sin(roll / 2) * np.sin(pitch / 2) * np.cos(
             yaw / 2)
-        qw, qx, qy, qz = make_first_positive(qw, qx, qy, qz)
+        qw, qx, qy, qz = TransformUtils.make_first_positive(qw, qx, qy, qz)
         return np.array([qw, qx, qy, qz])
 
     @staticmethod
@@ -118,11 +118,13 @@ class TransformUtils:
 
         transform_result = np.dot(transform_state, transform_dt)
 
-        euler_result = np.flip(R.from_matrix(transform_result[:3, :3]).as_quat(), 0)
+        euler_result = np.flip(R.from_matrix(transform_result[:3, :3]).as_euler('zyx'), 0)
         trans_result = transform_result[:3, 3]
         euler_result[0] = 0.0
         euler_result[1] = 0.0
         trans_result[2] = 0.0
+
+
 
         return np.concatenate((trans_result, euler_result), 0)
 

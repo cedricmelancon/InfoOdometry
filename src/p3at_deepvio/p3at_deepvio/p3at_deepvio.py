@@ -58,9 +58,7 @@ class P3atDeepvio(Node):
         self._last_camera_data = None
         self._last_stamp = None
 
-        self._img_seq = torch.zeros([self._odometry_model.clip_length, 1, 81920]).to('cuda:0')
-
-        self._imu_seq = collections.deque(maxlen=self._odometry_model.clip_length)
+        #self._img_seq = torch.zeros([2, 81920]).to('cuda:0')
         self._monitoring_data = collections.deque()
         self._odometry_state = torch.zeros(1,
                                            self._odometry_model.args.state_size,
@@ -95,13 +93,14 @@ class P3atDeepvio(Node):
     def push_to_tensor_alternative(tensor, x):
         return torch.cat((tensor[1:7], x))
 
-    def process_data(self, camera_data, last_camera_data, height, width, current_stamp):
+    def process_data(self, camera_data, last_camera_data, imu_data, height, width, current_stamp):
         camera_data = self.image_to_tensor(camera_data, height, width)
 
         if last_camera_data is not None:
             start_time = time.perf_counter()
             last_camera_data = self.image_to_tensor(last_camera_data, height, width)
 
+            self._model_lock.acquire()
             img_pair = [last_camera_data, camera_data]
             img_pair = np.array(img_pair).transpose(3, 0, 1, 2)
             img_pair = np.expand_dims(img_pair, axis=0)
@@ -109,30 +108,26 @@ class P3atDeepvio(Node):
             img_pair = torch.from_numpy(img_pair).type(torch.FloatTensor).to('cuda:0')
 
             feature_data = self._odometry_model.forward_flownet(img_pair)
+
             flownet_time = (time.perf_counter() - start_time)
 
-            self.push_to_tensor_alternative(self._img_seq, feature_data)
+            #self.push_to_tensor_alternative(self._img_seq, feature_data)
 
-            odometry = None
+            if self.beliefs is None:
+                self.beliefs = torch.rand(1, self.args.belief_size, device=self.args.device)
 
-            if self.frame_nb >= self.skip_frame + 7:
-                self._model_lock.acquire()
+            imu_seq = torch.from_numpy(imu_data).type(torch.FloatTensor).to('cuda:0')
+            imu_seq = imu_seq.unsqueeze(0)
+            prev_beliefs = self.beliefs
 
-                if self.beliefs is None:
-                    self.beliefs = torch.rand(1, self.args.belief_size, device=self.args.device)
-                else:
-                    self.beliefs = self.beliefs[1, :]
+            with torch.no_grad():
+                self.beliefs, odometry, timing = self._odometry_model.step(feature_data, imu_seq, prev_beliefs)
 
-                imu_seq = torch.from_numpy(np.array(list(self._imu_seq))).type(torch.FloatTensor).to('cuda:0')
-                prev_beliefs = self.beliefs
-
-                with torch.no_grad():
-                    self.beliefs, odometry, timing = self._odometry_model.step(self._img_seq, imu_seq, prev_beliefs)
-
-                self._model_lock.release()
+            self._model_lock.release()
 
             if odometry is not None:
-                odometry = odometry.cpu().numpy()[-1][0]
+                odometry = odometry.cpu().numpy()[0]
+
                 dt = [float(odometry[0]), float(odometry[1]), 0.0, 0.0, 0.0, float(odometry[5])]
 
                 self._last_position = TransformUtils.get_absolute_pose_step(dt, self._last_position)
@@ -141,10 +136,13 @@ class P3atDeepvio(Node):
                 odometry_msg.pose.pose.position.x = float(self._last_position[0])
                 odometry_msg.pose.pose.position.y = float(self._last_position[1])
                 odometry_msg.pose.pose.position.z = 0.0
-                odometry_msg.pose.pose.orientation.x = float(self._last_position[3])
-                odometry_msg.pose.pose.orientation.y = float(self._last_position[4])
-                odometry_msg.pose.pose.orientation.z = float(self._last_position[5])
-                odometry_msg.pose.pose.orientation.w = float(self._last_position[6])
+
+                euler = np.array(odometry[-3:])
+                quat = TransformUtils.euler_to_quaternion(euler)
+                odometry_msg.pose.pose.orientation.x = float(quat[0])
+                odometry_msg.pose.pose.orientation.y = float(quat[1])
+                odometry_msg.pose.pose.orientation.z = float(quat[2])
+                odometry_msg.pose.pose.orientation.w = float(quat[3])
 
                 # if self._last_position is None:
                 #    odometry_msg.twist.linear.x = 0.0
@@ -174,7 +172,6 @@ class P3atDeepvio(Node):
         imu_data = np.array(list(self._imu_data), copy=True)
         self._imu_lock.release()
 
-        self._imu_seq.append(np.expand_dims(imu_data, 0))
         if self.frame_nb < self.skip_frame:
             self.frame_nb += 1
             return
@@ -186,6 +183,7 @@ class P3atDeepvio(Node):
         last_camera_data = np.array(self._last_camera_data, copy=True) if self._last_camera_data is not None else None
         self.process_data(camera_data,
                           last_camera_data,
+                          imu_data,
                           msg.height,
                           msg.width,
                           msg.header.stamp)

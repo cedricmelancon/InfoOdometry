@@ -30,4 +30,4 @@ build/
 
 install/
 
-monitoring.csv
+monitoring*.csv
