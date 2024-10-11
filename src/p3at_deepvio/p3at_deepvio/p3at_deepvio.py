@@ -113,8 +113,8 @@ class P3atDeepvio(Node):
             feature_data = self._odometry_model.forward_flownet(img_pair)
             flownet_time = (time.perf_counter() - start_time)
 
-            #self.push_to_tensor_alternative(self._img_seq, feature_data)
-            self.push_to_tensor_alternative(self._img_seq, img_pair)
+            self.push_to_tensor_alternative(self._img_seq, feature_data)
+            #self.push_to_tensor_alternative(self._img_seq, img_pair)
 
             odometry = None
 
