@@ -31,6 +31,8 @@ class P3atDeepvio(Node):
         self._imu_lock = Lock()
         self._camera_lock = Lock()
         self._model_lock = Lock()
+        self._flownet_lock = Lock()
+        self._monitoring_lock = Lock()
 
         self.skip_frame = 5
         self.frame_nb = 0
@@ -45,6 +47,7 @@ class P3atDeepvio(Node):
         publisher_group = ReentrantCallbackGroup()
         subscriber1_group = ReentrantCallbackGroup()
         subscriber2_group = ReentrantCallbackGroup()
+        timer_group = MutuallyExclusiveCallbackGroup()
 
         self._odometry_model = OdometryModel(self.args)
 
@@ -69,18 +72,19 @@ class P3atDeepvio(Node):
         self.prev_beliefs = torch.rand(1, self.args.belief_size, device=self.args.device)
         self.prev_state = torch.zeros(1, self.args.state_size, device=self.args.device)
 
-        self.get_logger().info('Running')
-
-    def write_timing(self):
         csvfile = open(f'monitoring.csv', 'w', newline='')
         self.csvwriter = csv.writer(csvfile, delimiter=' ')
 
-        self.get_logger().info('Writing timing.')
+        self.timer = self.create_timer(0.3, self.write_timing, callback_group=timer_group)
 
-        while len(self._monitoring_data) > 0:
-            self.csvwriter.writerow(self._monitoring_data.pop())
+        self.get_logger().info('Running')
 
-        self.get_logger().info('Timing written.')
+    def write_timing(self):
+        if len(self._monitoring_data) > 0:
+            self._monitoring_lock.acquire()
+            data = self._monitoring_data.pop()
+            self._monitoring_lock.release()
+            self.csvwriter.writerow(data)
 
     @staticmethod
     def image_to_tensor(image, width, height):
@@ -100,7 +104,7 @@ class P3atDeepvio(Node):
             start_time = time.perf_counter()
             last_camera_data = self.image_to_tensor(last_camera_data, height, width)
 
-            self._model_lock.acquire()
+            self._flownet_lock.acquire()
             img_pair = [last_camera_data, camera_data]
             img_pair = np.array(img_pair).transpose(3, 0, 1, 2)
             img_pair = np.expand_dims(img_pair, axis=0)
@@ -110,9 +114,11 @@ class P3atDeepvio(Node):
             feature_data = self._odometry_model.forward_flownet(img_pair)
 
             flownet_time = (time.perf_counter() - start_time)
+            self._flownet_lock.release()
 
-            #self.push_to_tensor_alternative(self._img_seq, feature_data)
-
+            self._model_lock.acquire()
+            clone_feature = torch.clone(feature_data)
+            
             if self.beliefs is None:
                 self.beliefs = torch.rand(1, self.args.belief_size, device=self.args.device)
 
@@ -121,9 +127,14 @@ class P3atDeepvio(Node):
             prev_beliefs = self.beliefs
 
             with torch.no_grad():
-                self.beliefs, odometry, timing = self._odometry_model.step(feature_data, imu_seq, prev_beliefs)
+                self.beliefs, odometry, timing = self._odometry_model.step(clone_feature, imu_seq, prev_beliefs)
 
             self._model_lock.release()
+
+            self._monitoring_lock.acquire()
+            self._monitoring_data.append(
+                np.array([self.frame_nb, flownet_time] + timing))
+            self._monitoring_lock.release()
 
             if odometry is not None:
                 odometry = odometry.cpu().numpy()[0]
@@ -163,9 +174,6 @@ class P3atDeepvio(Node):
 
                 # self.rate_counter.inc()
                 self._publisher.publish(odometry_msg)
-
-                self._monitoring_data.append(
-                    np.array([self.frame_nb, flownet_time] + timing + [time.perf_counter() - start_time]))
 
     def camera_callback(self, msg):
         self._imu_lock.acquire()
@@ -209,7 +217,8 @@ def main(args=None):
     except KeyboardInterrupt:
         localization_node.get_logger().info('Shutting down...')
     finally:
-        localization_node.write_timing()
+        pass
+        #localization_node.write_timing()
         # localization_node.destroy_node()
         # rclpy.shutdown()
 
