@@ -32,6 +32,7 @@ class P3atDeepvio(Node):
         self._camera_lock = Lock()
         self._model_lock = Lock()
         self._monitoring_lock = Lock()
+        self._flownet_lock = Lock()
 
         self.skip_frame = 5
         self.frame_nb = 0
@@ -60,8 +61,8 @@ class P3atDeepvio(Node):
         self._last_camera_data = None
         self._last_stamp = None
 
-        #self._img_seq = torch.zeros([self._odometry_model.clip_length, 1, 81920]).to('cuda:0')
-        self._img_seq = torch.zeros([self._odometry_model.clip_length, 1, 3, 2, 480, 640]).to('cuda:0')
+        self._img_seq = torch.zeros([self._odometry_model.clip_length, 1, 81920]).to('cuda:0')
+        #self._img_seq = torch.zeros([self._odometry_model.clip_length, 1, 3, 2, 480, 640]).to('cuda:0')
 
         self._imu_seq = collections.deque(maxlen=self._odometry_model.clip_length)
         self._monitoring_data = collections.deque()
@@ -102,7 +103,7 @@ class P3atDeepvio(Node):
         camera_data = self.image_to_tensor(camera_data, height, width)
 
         if last_camera_data is not None:
-            self._model_lock.acquire()
+            self._flownet_lock.acquire()
             start_time = time.perf_counter()
             last_camera_data = self.image_to_tensor(last_camera_data, height, width)
 
@@ -113,18 +114,18 @@ class P3atDeepvio(Node):
             img_pair = torch.from_numpy(img_pair).type(torch.FloatTensor).to('cuda:0')
 
             #print(img_pair.shape)
-            #feature_data = self._odometry_model.forward_flownet(img_pair)
-            #flownet_time = (time.perf_counter() - start_time)
-            flownet_time = 0.0
+            feature_data = self._odometry_model.forward_flownet(img_pair)
+            flownet_time = (time.perf_counter() - start_time)
+            #flownet_time = 0.0
 
-            #self._model_lock.acquire()
-            #self.push_to_tensor_alternative(self._img_seq, feature_data)
-            self.push_to_tensor_alternative(self._img_seq, img_pair)
+            self.push_to_tensor_alternative(self._img_seq, torch.clone(feature_data))
+            self._flownet_lock.release()
+            #self.push_to_tensor_alternative(self._img_seq, img_pair)
 
             odometry = None
 
             if self.frame_nb >= self.skip_frame + 7:
-
+                self._model_lock.acquire()
 
                 if self.beliefs is None:
                     self.beliefs = torch.rand(1, self.args.belief_size, device=self.args.device)
@@ -135,13 +136,15 @@ class P3atDeepvio(Node):
                 prev_beliefs = self.beliefs
 
                 with torch.no_grad():
-                    self.beliefs, odometry, timing = self._odometry_model.forward_full(self._img_seq, imu_seq, prev_beliefs)
+                    self.beliefs, odometry, timing = self._odometry_model.forward(self._img_seq, imu_seq, prev_beliefs)
+
+                self._model_lock.release()
 
                 self._monitoring_lock.acquire()
                 self._monitoring_data.append(
                     np.array([self.frame_nb, flownet_time] + timing))
                 self._monitoring_lock.release()
-            self._model_lock.release()
+
             if odometry is not None:
                 odometry = odometry.cpu().numpy()[-1][0]
                 dt = [float(odometry[0]), float(odometry[1]), 0.0, 0.0, 0.0, float(odometry[5])]
