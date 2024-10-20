@@ -21,6 +21,8 @@ from info_odometry.utils.transform_utils import TransformUtils
 import time
 import csv
 
+from p3at_deepvio.monitor import Monitor
+
 
 class P3atDeepvio(Node):
     def __init__(self):
@@ -33,6 +35,7 @@ class P3atDeepvio(Node):
         self._model_lock = Lock()
         self._monitoring_lock = Lock()
         self._flownet_lock = Lock()
+        self._sys_mon_lock = Lock()
 
         self.skip_frame = 5
         self.frame_nb = 0
@@ -48,6 +51,7 @@ class P3atDeepvio(Node):
         subscriber1_group = ReentrantCallbackGroup()
         subscriber2_group = ReentrantCallbackGroup()
         timer_group = MutuallyExclusiveCallbackGroup()
+        monitoring_group = MutuallyExclusiveCallbackGroup()
 
         self._odometry_model = OdometryModel(self.args)
 
@@ -78,8 +82,30 @@ class P3atDeepvio(Node):
         csvfile = open(f'monitoring.csv', 'w', newline='')
         self.csvwriter = csv.writer(csvfile, delimiter=' ')
 
+        mon_csvfile = open(f'system.csv', 'w', newline='')
+        self.system_csv_writer = csv.writer(mon_csvfile, delimiter=' ')
+        
         self.timer = self.create_timer(0.3, self.write_timing, callback_group=timer_group)
+        self.timer_mon = self.create_timer(0.1, self.write_system_info, callback_group=monitoring_group)
         self.get_logger().info('Running')
+
+    def write_system_info(self):
+        self._sys_mon_lock.acquire()
+        cpu = self._monitor.get_cpu_info()["cpu/load/avg_sys_load_one_min_percent"]
+        ram = self._monitor.get_memory_info()
+        ram_avail = ram["memory/available_memory_sys_MB"]
+        ram_used = ram["memory/used_memory_sys_MB"]
+        ram_perc = ram["memory/used_memory_sys_percent"]
+        smi = self._monitor.get_nvidia_smi_info()
+        gpu_avail = smi["05_gpu_smi/gpu_0_fb_total_MiB"]
+        gpu_used = smi["05_gpu_smi/gpu_0_fb_used_MiB"]
+        gpu_perc = smi["05_gpu_smi/gpu_0_fb_free_MiB"]
+        gpu_temp = smi["05_gpu_smi/gpu_0_temp_in_C"]
+        gpu_power = smi["05_gpu_smi/gpu_0_power_in_W"]
+
+        data = np.array([cpu, ram_avail, ram_used, ram_perc, gpu_avail, gpu_used, gpu_perc, gpu_temp, gpu_power])
+        self.system_csv_writer.writerow(data)
+        self._sys_mon_lock.release()
 
     def write_timing(self):
         if len(self._monitoring_data) > 0:
