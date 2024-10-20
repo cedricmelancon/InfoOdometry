@@ -24,7 +24,7 @@ from info_odometry.dataset.mit_stata_center_dataset import load_mit_clips
 from info_odometry.odometry_model import OdometryModel
 import torch.optim as optim
 
-from src.info_odometry.info_odometry.param import Param
+from info_odometry.param_train import ParamTrain
 
 
 def save_data(writer, loss, labels_global, labels_delta, pred_abs, pred_rel, epoch, n_iter):
@@ -171,19 +171,18 @@ def train(model, args):
 
             # transitions start at time t = 0
             # create initial belief and state for time t = 0
-            x_img_pairs = torch.stack(x_img_list, dim=0)
+            x_img_pairs = torch.stack(x_img_list, dim=0).type(torch.FloatTensor).to(device=args.device)
+            x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=args.device)
             running_batch_size = x_img_pairs.size()[1]  # might be different for the last batch
 
-            init_state = torch.zeros(running_batch_size, args.state_size, device=args.device)
             init_belief = torch.rand(running_batch_size, args.belief_size, device=args.device)
 
-            observations = model.forward_flownet(x_img_list)
+            observations = model.forward_flownet(x_img_pairs)
 
             (beliefs,
-             pred_rel_poses) = model.forward(observations,
-                                             x_imu_list,
-                                             y_rel_poses,
-                                             init_state,
+             pred_rel_poses,
+             _) = model.forward(observations,
+                                             x_imu_seqs,
                                              init_belief)
 
             (total_loss,
@@ -399,7 +398,7 @@ def train(model, args):
 
 
 def main():
-    param = Param()
+    param = ParamTrain()
     args = param.get_args()
     model = OdometryModel(args)
     np.random.seed(args.seed)

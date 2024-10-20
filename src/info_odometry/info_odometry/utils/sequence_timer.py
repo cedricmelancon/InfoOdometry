@@ -1,5 +1,6 @@
 from timeit import default_timer as timer
 
+
 class SequenceTimer:
     def __init__(self):
         self.curr_time = timer()

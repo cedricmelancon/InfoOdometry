@@ -260,7 +260,7 @@ class OdometryModel:
         start_time = time.perf_counter()
 
         if self._use_imu:
-            encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_cseqs)
+            encode_observations = (ModelUtils.bottle(self.encoder, (observations,)), x_imu_seqs)
         elif self.args.imu_only:
             encode_observations = x_imu_seqs
         else:
