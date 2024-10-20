@@ -182,8 +182,8 @@ def train(model, args):
             (beliefs,
              pred_rel_poses,
              _) = model.forward(observations,
-                                             x_imu_seqs,
-                                             init_belief)
+                                x_imu_seqs,
+                                init_belief)
 
             (total_loss,
              pose_trans_loss_x,
@@ -261,7 +261,8 @@ def train(model, args):
                         last_pose = y_glob_poses[0].unsqueeze(0)
                         last_gt_pose = y_glob_poses[0].unsqueeze(0)
 
-                    x_img_pairs = torch.stack(x_img_list, dim=0)
+                    x_img_pairs = torch.stack(x_img_list, dim=0).type(torch.FloatTensor).to(device=args.device)
+                    x_imu_seqs = torch.stack(x_imu_list, dim=0).type(torch.FloatTensor).to(device=args.device)
                     running_eval_batch_size = x_img_pairs.size()[1]  # might be different for the last batch
 
                     #init_state = torch.zeros(running_eval_batch_size, args.state_size, device=args.device)
@@ -271,13 +272,12 @@ def train(model, args):
                     else:
                         beliefs = beliefs[1, :]
 
-                    observations = model.forward_flownet(x_img_list)
+                    observations = model.forward_flownet(x_img_pairs)
                     (beliefs,
-                     pred_rel_poses) =  model.forward(observations,
-                                                      x_imu_list,
-                                                      y_rel_poses,
-                                                      None,
-                                                      self.beliefs)
+                     pred_rel_poses,
+                     _) =  model.forward(observations,
+                                         x_imu_seqs,
+                                         self.beliefs)
 
                     (total_loss,
                      pose_trans_loss_x,
