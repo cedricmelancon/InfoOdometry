@@ -277,7 +277,7 @@ def train(model, args):
                      pred_rel_poses,
                      _) =  model.forward(observations,
                                          x_imu_seqs,
-                                         self.beliefs)
+                                         beliefs)
 
                     (total_loss,
                      pose_trans_loss_x,
