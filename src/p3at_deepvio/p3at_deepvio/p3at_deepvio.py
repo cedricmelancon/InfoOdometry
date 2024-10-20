@@ -47,6 +47,8 @@ class P3atDeepvio(Node):
         torch.manual_seed(self.args.seed)
         torch.cuda.manual_seed(self.args.seed)
 
+        self._monitor = Monitor(cuda_enabled=True)
+
         publisher_group = ReentrantCallbackGroup()
         subscriber1_group = ReentrantCallbackGroup()
         subscriber2_group = ReentrantCallbackGroup()
