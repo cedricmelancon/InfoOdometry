@@ -126,10 +126,10 @@ class P3atDeepvio(Node):
         camera_data = self.image_to_tensor(camera_data, height, width)
 
         if last_camera_data is not None:
+            self._flownet_lock.acquire()
             start_time = time.perf_counter()
             last_camera_data = self.image_to_tensor(last_camera_data, height, width)
-
-            self._flownet_lock.acquire()
+            
             img_pair = [last_camera_data, camera_data]
             img_pair = np.array(img_pair).transpose(3, 0, 1, 2)
             img_pair = np.expand_dims(img_pair, axis=0)
