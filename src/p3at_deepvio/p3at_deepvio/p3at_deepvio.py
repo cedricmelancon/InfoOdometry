@@ -223,27 +223,20 @@ class P3atDeepvio(Node):
         self._imu_seq.append(np.expand_dims(imu_data, 0))
         
         self._camera_lock.acquire()
-        frame_nb = self.frame_nb
-        self._camera_lock.release()
-
-        if frame_nb < self.skip_frame:
-            self.frame_nb += 1
-            return
-
-        self._camera_lock.acquire()
+        self._thread_local.frame_nb = self.frame_nb
         self.frame_nb += 1
-        camera_data = np.array(list(msg.data), dtype=np.uint8, copy=True)
-        last_camera_data = np.array(self._last_camera_data, copy=True) if self._last_camera_data is not None else None
+        self._thread_local.camera_data = np.array(list(msg.data), dtype=np.uint8, copy=True)
+        self._thread_local.last_camera_data = np.array(self._last_camera_data, copy=True) if self._last_camera_data is not None else None
+        self._last_camera_data = np.array(self._thread_local.camera_data, copy=True)
         self._camera_lock.release()
 
-        self.process_data(frame_nb,
-                          camera_data,
-                          last_camera_data,
+        self.process_data(self._thread_local.frame_nb,
+                          self._thread_local.camera_data,
+                          self._thread_local.last_camera_data,
                           msg.height,
                           msg.width,
                           msg.header.stamp)
 
-        self._last_camera_data = np.array(camera_data)
 
     def imu_callback(self, msg):
         self._imu_lock.acquire()
