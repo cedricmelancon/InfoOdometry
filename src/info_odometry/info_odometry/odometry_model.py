@@ -117,6 +117,7 @@ class OdometryModel:
         observations = ModelUtils.bottle(self.flownet_model, (x_img_pairs,))
         obs_size = observations.size()
         observations = observations.view(obs_size[0], obs_size[1], -1)
+        flownet_time = time.perf_counter()
 
         # update belief/state using posterior from previous belief/state, previous pose and current
         # observation (over entire sequence at once)
@@ -189,9 +190,10 @@ class OdometryModel:
 
         pred_rel_poses = ModelUtils.bottle(self.pose_model, (posterior_states,))
         pose_time = time.perf_counter()
-        timing = [encoder_time - start_time, transition_time - encoder_time, pose_time - transition_time]
+        timing = [encoder_time - flownet_time, transition_time - encoder_time, pose_time - transition_time]
         return (beliefs,
                 pred_rel_poses,
+                flownet_time - start_time,
                 timing)
 
     def forward(self, observations, x_imu_seqs, prev_beliefs):

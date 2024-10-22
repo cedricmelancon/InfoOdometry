@@ -105,7 +105,7 @@ class P3atDeepvio(Node):
         gpu_temp = smi["05_gpu_smi/gpu_0_temp_in_C"]
         gpu_power = smi["05_gpu_smi/gpu_0_power_in_W"]
 
-        data = np.array([cpu, ram_avail, ram_used, ram_perc, gpu_avail, gpu_used, gpu_perc, gpu_temp, gpu_power])
+        data = np.array([time.perf_counter(), cpu, ram_avail, ram_used, ram_perc, gpu_avail, gpu_used, gpu_perc, gpu_temp, gpu_power])
         self.system_csv_writer.writerow(data)
         self._sys_mon_lock.release()
 
@@ -127,12 +127,12 @@ class P3atDeepvio(Node):
     def push_to_tensor_alternative(tensor, x):
         return torch.cat((tensor[1:7], x))
 
-    def process_data(self, camera_data, last_camera_data, height, width, current_stamp):
+    def process_data(self, frame_nb, camera_data, last_camera_data, height, width, current_stamp):
         camera_data = self.image_to_tensor(camera_data, height, width)
 
         if last_camera_data is not None:
-            self._flownet_lock.acquire()
-            start_time = time.perf_counter()
+            self._flownet_lock.acquire()  # phase 2
+            start_time = time.perf_counter()  # phase 2
             last_camera_data = self.image_to_tensor(last_camera_data, height, width)
 
             img_pair = [last_camera_data, camera_data]
@@ -141,18 +141,17 @@ class P3atDeepvio(Node):
             img_pair = np.expand_dims(img_pair, axis=0)
             img_pair = torch.from_numpy(img_pair).type(torch.FloatTensor).to('cuda:0')
 
-            #print(img_pair.shape)
-            feature_data = self._odometry_model.forward_flownet(img_pair)
-            flownet_time = (time.perf_counter() - start_time)
-            #flownet_time = 0.0
+            feature_data = self._odometry_model.forward_flownet(img_pair)  # phase 2
+            flownet_time = (time.perf_counter() - start_time)  # phase 2
+            #flownet_time = 0.0  # phase 1
 
-            self.push_to_tensor_alternative(self._img_seq, torch.clone(feature_data))
-            self._flownet_lock.release()
-            #self.push_to_tensor_alternative(self._img_seq, img_pair)
+            self.push_to_tensor_alternative(self._img_seq, torch.clone(feature_data))  # phase 2
+            self._flownet_lock.release()  # phase 2
+            #self.push_to_tensor_alternative(self._img_seq, img_pair)  # phase 1
 
             odometry = None
 
-            if self.frame_nb >= self.skip_frame + 7:
+            if frame_nb >= self.skip_frame + 7:
                 self._model_lock.acquire()
 
                 if self.beliefs is None:
@@ -164,13 +163,13 @@ class P3atDeepvio(Node):
                 prev_beliefs = self.beliefs
 
                 with torch.no_grad():
-                    self.beliefs, odometry, timing = self._odometry_model.forward(self._img_seq, imu_seq, prev_beliefs)
+                    self.beliefs, odometry, timing = self._odometry_model.forward(self._img_seq, imu_seq, prev_beliefs)  # phase 2
+                    #self.beliefs, odometry, flownet_time, timing = self._odometry_model.forward_full(self._img_seq, imu_seq, prev_beliefs)  # phase 1
 
                 self._model_lock.release()
 
                 self._monitoring_lock.acquire()
-                self._monitoring_data.append(
-                    np.array([self.frame_nb, flownet_time] + timing))
+                self._monitoring_data.append(np.array([time.perf_counter(), frame_nb, flownet_time] + timing))
                 self._monitoring_lock.release()
 
             if odometry is not None:
@@ -216,15 +215,21 @@ class P3atDeepvio(Node):
         self._imu_lock.release()
 
         self._imu_seq.append(np.expand_dims(imu_data, 0))
+        
+        self._camera_lock.acquire()
+        frame_nb = self.frame_nb
+        self._camera_lock.release()
+
         if self.frame_nb < self.skip_frame:
             self.frame_nb += 1
             return
 
-        self.frame_nb += 1
         self._camera_lock.acquire()
+        self.frame_nb += 1
         camera_data = np.array(list(msg.data), dtype=np.uint8, copy=True)
-        self._camera_lock.release()
         last_camera_data = np.array(self._last_camera_data, copy=True) if self._last_camera_data is not None else None
+        self._camera_lock.release()
+
         self.process_data(camera_data,
                           last_camera_data,
                           msg.height,
