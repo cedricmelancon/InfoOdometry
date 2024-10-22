@@ -127,19 +127,18 @@ class P3atDeepvio(Node):
     def push_to_tensor_alternative(tensor, x):
         return torch.cat((tensor[1:7], x))
 
-    def process_data(self, frame_nb, camera_data, last_camera_data, imu_data, height, width, current_stamp):
-        camera_data = self.image_to_tensor(camera_data, height, width)
-        self._thread_local.frame_nb = frame_nb
+    def process_data(self, height, width, current_stamp):
+        self._thread_local.camera_data = self.image_to_tensor(self._thread_local.camera_data, height, width)
 
-        imu_seq = torch.from_numpy(imu_data).type(torch.FloatTensor).to('cuda:0')
+        imu_seq = torch.from_numpy(self._thread_local.imu_data).type(torch.FloatTensor).to('cuda:0')
         self._thread_local.imu_seq = imu_seq.unsqueeze(0)
 
-        if last_camera_data is not None:
+        if self._thread_local.last_camera_data is not None:
             self._flownet_lock.acquire()
             start_time = time.perf_counter()
-            last_camera_data = self.image_to_tensor(last_camera_data, height, width)
+            self._thread_local.last_camera_data = self.image_to_tensor(self._thread_local.last_camera_data, height, width)
             
-            img_pair = [last_camera_data, camera_data]
+            img_pair = [self._thread_local.last_camera_data, self._thread_local.camera_data]
             img_pair = np.array(img_pair).transpose(3, 0, 1, 2)
             img_pair = np.expand_dims(img_pair, axis=0)
             img_pair = np.expand_dims(img_pair, axis=0)
@@ -208,7 +207,7 @@ class P3atDeepvio(Node):
 
     def camera_callback(self, msg):
         self._imu_lock.acquire()
-        imu_data = np.array(list(self._imu_data), copy=True)
+        self._thread_local.imu_data = np.array(list(self._imu_data), copy=True)
         self._imu_lock.release()
 
         self._camera_lock.acquire()
@@ -216,15 +215,12 @@ class P3atDeepvio(Node):
         self._thread_local.camera_data = np.array(list(msg.data), dtype=np.uint8, copy=True)
         self._thread_local.last_camera_data = np.array(self._last_camera_data, copy=True) if self._last_camera_data is not None else None
         self._last_camera_data = np.array(self._thread_local.camera_data)
+        self._thread_local.frame_nb = self.frame_nb
         self.frame_nb += 1
         
         self._camera_lock.release()
 
-        self.process_data(self.frame_nb,
-                          self._thread_local.camera_data,
-                          self._thread_local.last_camera_data,
-                          imu_data,
-                          msg.height,
+        self.process_data(msg.height,
                           msg.width,
                           msg.header.stamp)
 
