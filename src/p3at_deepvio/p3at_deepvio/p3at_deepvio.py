@@ -54,7 +54,6 @@ class P3atDeepvio(Node):
         publisher_group = ReentrantCallbackGroup()
         subscriber1_group = ReentrantCallbackGroup()
         subscriber2_group = ReentrantCallbackGroup()
-        timer_group = MutuallyExclusiveCallbackGroup()
         monitoring_group = MutuallyExclusiveCallbackGroup()
 
         self._odometry_model = OdometryModel(self.args)
@@ -73,7 +72,7 @@ class P3atDeepvio(Node):
         #self._img_seq = torch.zeros([self._odometry_model.clip_length, 1, 3, 2, 480, 640]).to('cuda:0')
 
         self._imu_seq = collections.deque(maxlen=self._odometry_model.clip_length)
-        self._monitoring_data = collections.deque()
+
         self._odometry_state = torch.zeros(1,
                                            self._odometry_model.args.state_size,
                                            device=self._odometry_model.args.device)
@@ -89,7 +88,6 @@ class P3atDeepvio(Node):
         mon_csvfile = open(f'system.csv', 'w', newline='')
         self.system_csv_writer = csv.writer(mon_csvfile, delimiter=' ')
         
-        self.timer = self.create_timer(0.3, self.write_timing, callback_group=timer_group)
         self.timer_mon = self.create_timer(0.1, self.write_system_info, callback_group=monitoring_group)
         self.get_logger().info('Running')
 
@@ -112,13 +110,6 @@ class P3atDeepvio(Node):
         data = np.array([time.perf_counter(), cpu, ram_avail, ram_used, ram_perc, gpu_avail, gpu_used, gpu_perc, gpu_temp, gpu_power, gpu_util, mem_util])
         self.system_csv_writer.writerow(data)
         self._sys_mon_lock.release()
-
-    def write_timing(self):
-        if len(self._monitoring_data) > 0:
-            self._monitoring_lock.acquire()
-            data = self._monitoring_data.pop()
-            self._monitoring_lock.release()
-            self.csvwriter.writerow(data)
 
     @staticmethod
     def image_to_tensor(image, width, height):
@@ -171,11 +162,8 @@ class P3atDeepvio(Node):
                     self.beliefs, odometry, timing = self._odometry_model.forward(self._thread_local.img_seq, self._thread_local.imu_seq, prev_beliefs)  # phase 2
                     #self.beliefs, odometry, self._thread_local.flownet_time, timing = self._odometry_model.forward_full(self._thread_local.img_seq, self._thread_local.imu_seq, prev_beliefs)  # phase 1
 
+                self._thread_local.mon_data = np.array([time.perf_counter(), self._thread_local.frame_nb, self._thread_local.flownet_time] + timing, copy=True)
                 self._model_lock.release()
-
-                self._monitoring_lock.acquire()
-                self._monitoring_data.append(np.array([time.perf_counter(), self._thread_local.frame_nb, self._thread_local.flownet_time] + timing))
-                self._monitoring_lock.release()
 
             if odometry is not None:
                 odometry = odometry.cpu().numpy()[-1][0]
@@ -213,6 +201,10 @@ class P3atDeepvio(Node):
                 self._publisher.publish(odometry_msg)
 
                 # odometry, timing_monitor = self.execute_model(current_stamp)
+
+            self._monitoring_lock.acquire()
+            self.csvwriter.writerow(self._thread_local.mon_data)
+            self._monitoring_lock.release()
 
     def camera_callback(self, msg):
         self._imu_lock.acquire()
