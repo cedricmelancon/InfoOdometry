@@ -106,8 +106,10 @@ class P3atDeepvio(Node):
         gpu_perc = smi["05_gpu_smi/gpu_0_fb_free_MiB"]
         gpu_temp = smi["05_gpu_smi/gpu_0_temp_in_C"]
         gpu_power = smi["05_gpu_smi/gpu_0_power_in_W"]
+        gpu_util = smi["05_gpu_smi/gpu_0_gpu_util_in_percent"]
+        mem_util = smi["05_gpu_smi/gpu_0_mem_util_in_percent"]
 
-        data = np.array([time.perf_counter(), cpu, ram_avail, ram_used, ram_perc, gpu_avail, gpu_used, gpu_perc, gpu_temp, gpu_power])
+        data = np.array([time.perf_counter(), cpu, ram_avail, ram_used, ram_perc, gpu_avail, gpu_used, gpu_perc, gpu_temp, gpu_power, gpu_util, mem_util])
         self.system_csv_writer.writerow(data)
         self._sys_mon_lock.release()
 
