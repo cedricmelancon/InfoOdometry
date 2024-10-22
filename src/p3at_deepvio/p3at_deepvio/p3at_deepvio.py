@@ -216,11 +216,12 @@ class P3atDeepvio(Node):
         self._thread_local.camera_data = np.array(list(msg.data), dtype=np.uint8, copy=True)
         self._thread_local.last_camera_data = np.array(self._last_camera_data, copy=True) if self._last_camera_data is not None else None
         self._last_camera_data = np.array(self._thread_local.camera_data)
+        self._thread_local.frame_nb = self.frame_nb
         self.frame_nb += 1
         
         self._camera_lock.release()
 
-        self.process_data(self.frame_nb,
+        self.process_data(self._thread_local.frame_nb,
                           self._thread_local.camera_data,
                           self._thread_local.last_camera_data,
                           imu_data,
