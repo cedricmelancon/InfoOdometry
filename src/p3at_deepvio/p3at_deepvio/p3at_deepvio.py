@@ -125,12 +125,12 @@ class P3atDeepvio(Node):
     def process_data(self, height, width, current_stamp):
         self._thread_local.camera_data = self.image_to_tensor(self._thread_local.camera_data, height, width)
 
-        if last_camera_data is not None:
+        if self._thread_local.last_camera_data is not None:
             self._flownet_lock.acquire()  # phase 2
             start_time = time.perf_counter()  # phase 2
-            last_camera_data = self.image_to_tensor(last_camera_data, height, width)
+            self._thread_local.last_camera_data = self.image_to_tensor(self._thread_local.last_camera_data, height, width)
 
-            img_pair = [last_camera_data, self._thread_local.camera_data]
+            img_pair = [self._thread_local.last_camera_data, self._thread_local.camera_data]
             img_pair = np.array(img_pair).transpose(3, 0, 1, 2)
             img_pair = np.expand_dims(img_pair, axis=0)
             img_pair = np.expand_dims(img_pair, axis=0)
@@ -202,9 +202,9 @@ class P3atDeepvio(Node):
 
                 # odometry, timing_monitor = self.execute_model(current_stamp)
 
-            self._monitoring_lock.acquire()
-            self.csvwriter.writerow(self._thread_local.mon_data)
-            self._monitoring_lock.release()
+                self._monitoring_lock.acquire()
+                self.csvwriter.writerow(self._thread_local.mon_data)
+                self._monitoring_lock.release()
 
     def camera_callback(self, msg):
         self._imu_lock.acquire()
