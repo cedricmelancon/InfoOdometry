@@ -38,8 +38,8 @@ class P3atDeepvio(Node):
         self._model_lock = Lock()
         self._flownet_lock = Lock()
         self._monitoring_lock = Lock()
-        self._sys_mon_lock = Lock()
 
+        self._system_data = None
         self.skip_frame = 5
         self.frame_nb = 0
         self.timing_monitor = {}
@@ -53,7 +53,6 @@ class P3atDeepvio(Node):
         publisher_group = ReentrantCallbackGroup()
         subscriber1_group = ReentrantCallbackGroup()
         subscriber2_group = ReentrantCallbackGroup()
-        #timer_group = MutuallyExclusiveCallbackGroup()
         monitoring_group = MutuallyExclusiveCallbackGroup()
 
         self._odometry_model = OdometryModel(self.args)
@@ -84,7 +83,6 @@ class P3atDeepvio(Node):
         mon_csvfile = open(f'system.csv', 'w', newline='')
         self.system_csv_writer = csv.writer(mon_csvfile, delimiter=' ')
 
-        #self.timer = self.create_timer(0.1, self.write_timing, callback_group=timer_group)
         self.timer = self.create_timer(0.1, self.write_system_info, callback_group=monitoring_group)
         self.get_logger().info('Running')
 
@@ -201,9 +199,10 @@ class P3atDeepvio(Node):
                 # self.rate_counter.inc()
                 self._publisher.publish(odometry_msg)
 
-            self._monitoring_lock.acquire()
-            self.csvwriter.writerow(self._thread_local.mon_data)
-            self._monitoring_lock.release()
+                self._monitoring_lock.acquire()
+                self.csvwriter.writerow(self._thread_local.mon_data)
+                self.system_csv_writer.writerow(self._system_data)
+                self._monitoring_lock.release()
 
     def camera_callback(self, msg):
         self._imu_lock.acquire()
