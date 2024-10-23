@@ -87,24 +87,22 @@ class P3atDeepvio(Node):
         self.get_logger().info('Running')
 
     def write_system_info(self):
-        self._sys_mon_lock.acquire()
-        cpu = self._monitor.get_cpu_info()["cpu/load/avg_sys_load_one_min_percent"]
-        ram = self._monitor.get_memory_info()
-        ram_avail = ram["memory/available_memory_sys_MB"]
-        ram_used = ram["memory/used_memory_sys_MB"]
-        ram_perc = ram["memory/used_memory_sys_percent"]
-        smi = self._monitor.get_nvidia_smi_info()
-        gpu_avail = smi["05_gpu_smi/gpu_0_fb_total_MiB"]
-        gpu_used = smi["05_gpu_smi/gpu_0_fb_used_MiB"]
-        gpu_perc = smi["05_gpu_smi/gpu_0_fb_free_MiB"]
-        gpu_temp = smi["05_gpu_smi/gpu_0_temp_in_C"]
-        gpu_power = smi["05_gpu_smi/gpu_0_power_in_W"]
-        gpu_util = smi["05_gpu_smi/gpu_0_gpu_util_in_percent"]
-        mem_util = smi["05_gpu_smi/gpu_0_mem_util_in_percent"]
+        self._thread_local.frame_nb = self.frame_nb
+        self._thread_local.cpu = self._monitor.get_cpu_info()["cpu/load/avg_sys_load_one_min_percent"]
+        self._thread_local.ram = self._monitor.get_memory_info()
+        self._thread_local.ram_avail = self._thread_local.ram["memory/available_memory_sys_MB"]
+        self._thread_local.ram_used = self._thread_local.ram["memory/used_memory_sys_MB"]
+        self._thread_local.ram_perc = self._thread_local.ram["memory/used_memory_sys_percent"]
+        self._thread_local.smi = self._monitor.get_nvidia_smi_info()
+        self._thread_local.gpu_avail = self._thread_local.smi["05_gpu_smi/gpu_0_fb_total_MiB"]
+        self._thread_local.gpu_used = self._thread_local.smi["05_gpu_smi/gpu_0_fb_used_MiB"]
+        self._thread_local.gpu_perc = self._thread_local.smi["05_gpu_smi/gpu_0_fb_free_MiB"]
+        self._thread_local.gpu_temp = self._thread_local.smi["05_gpu_smi/gpu_0_temp_in_C"]
+        self._thread_local.gpu_power = self._thread_local.smi["05_gpu_smi/gpu_0_power_in_W"]
+        self._thread_local.gpu_util = self._thread_local.smi["05_gpu_smi/gpu_0_gpu_util_in_percent"]
+        self._thread_local.mem_util = self._thread_local.smi["05_gpu_smi/gpu_0_mem_util_in_percent"]
 
-        data = np.array([time.perf_counter(), cpu, ram_avail, ram_used, ram_perc, gpu_avail, gpu_used, gpu_perc, gpu_temp, gpu_power, gpu_util, mem_util])
-        self.system_csv_writer.writerow(data)
-        self._sys_mon_lock.release()
+        self._system_data = np.array([self._thread_local.frame_nb, self._thread_local.cpu, self._thread_local.ram_avail, self._thread_local.ram_used, self._thread_local.ram_perc, self._thread_local.gpu_avail, self._thread_local.gpu_used, self._thread_local.gpu_perc, self._thread_local.gpu_temp, self._thread_local.gpu_power, self._thread_local.gpu_util, self._thread_local.mem_util], copy=True)
 
     #def write_timing(self):
         #if len(self._monitoring_data) > 0:
