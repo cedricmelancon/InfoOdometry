@@ -37,8 +37,8 @@ class P3atDeepvio(Node):
         self._model_lock = Lock()
         self._monitoring_lock = Lock()
         self._flownet_lock = Lock()
-        self._sys_mon_lock = Lock()
 
+        self._system_data = None
         self.skip_frame = 5
         self.frame_nb = 0
         self.timing_monitor = {}
@@ -68,8 +68,8 @@ class P3atDeepvio(Node):
         self._last_camera_data = None
         self._last_stamp = None
 
-        self._img_seq = torch.zeros([self._odometry_model.clip_length, 1, 81920]).to('cuda:0')
-        #self._img_seq = torch.zeros([self._odometry_model.clip_length, 1, 3, 2, 480, 640]).to('cuda:0')
+        #self._img_seq = torch.zeros([self._odometry_model.clip_length, 1, 81920]).to('cuda:0')
+        self._img_seq = torch.zeros([self._odometry_model.clip_length, 1, 3, 2, 480, 640]).to('cuda:0')
 
         self._imu_seq = collections.deque(maxlen=self._odometry_model.clip_length)
 
@@ -87,29 +87,28 @@ class P3atDeepvio(Node):
 
         mon_csvfile = open(f'system.csv', 'w', newline='')
         self.system_csv_writer = csv.writer(mon_csvfile, delimiter=' ')
-        
-        self.timer_mon = self.create_timer(0.1, self.write_system_info, callback_group=monitoring_group)
+
+        self.timer_mon = self.create_timer(0.2, self.write_system_info, callback_group=monitoring_group)
+
         self.get_logger().info('Running')
 
     def write_system_info(self):
-        self._sys_mon_lock.acquire()
-        cpu = self._monitor.get_cpu_info()["cpu/load/avg_sys_load_one_min_percent"]
-        ram = self._monitor.get_memory_info()
-        ram_avail = ram["memory/available_memory_sys_MB"]
-        ram_used = ram["memory/used_memory_sys_MB"]
-        ram_perc = ram["memory/used_memory_sys_percent"]
-        smi = self._monitor.get_nvidia_smi_info()
-        gpu_avail = smi["05_gpu_smi/gpu_0_fb_total_MiB"]
-        gpu_used = smi["05_gpu_smi/gpu_0_fb_used_MiB"]
-        gpu_perc = smi["05_gpu_smi/gpu_0_fb_free_MiB"]
-        gpu_temp = smi["05_gpu_smi/gpu_0_temp_in_C"]
-        gpu_power = smi["05_gpu_smi/gpu_0_power_in_W"]
-        gpu_util = smi["05_gpu_smi/gpu_0_gpu_util_in_percent"]
-        mem_util = smi["05_gpu_smi/gpu_0_mem_util_in_percent"]
+        self._thread_local.frame_nb = self.frame_nb
+        self._thread_local.cpu = self._monitor.get_cpu_info()["cpu/load/avg_sys_load_one_min_percent"]
+        self._thread_local.ram = self._monitor.get_memory_info()
+        self._thread_local.ram_avail = self._thread_local.ram["memory/available_memory_sys_MB"]
+        self._thread_local.ram_used = self._thread_local.ram["memory/used_memory_sys_MB"]
+        self._thread_local.ram_perc = self._thread_local.ram["memory/used_memory_sys_percent"]
+        self._thread_local.smi = self._monitor.get_nvidia_smi_info()
+        self._thread_local.gpu_avail = self._thread_local.smi["05_gpu_smi/gpu_0_fb_total_MiB"]
+        self._thread_local.gpu_used = self._thread_local.smi["05_gpu_smi/gpu_0_fb_used_MiB"]
+        self._thread_local.gpu_perc = self._thread_local.smi["05_gpu_smi/gpu_0_fb_free_MiB"]
+        self._thread_local.gpu_temp = self._thread_local.smi["05_gpu_smi/gpu_0_temp_in_C"]
+        self._thread_local.gpu_power = self._thread_local.smi["05_gpu_smi/gpu_0_power_in_W"]
+        self._thread_local.gpu_util = self._thread_local.smi["05_gpu_smi/gpu_0_gpu_util_in_percent"]
+        self._thread_local.mem_util = self._thread_local.smi["05_gpu_smi/gpu_0_mem_util_in_percent"]
 
-        data = np.array([time.perf_counter(), cpu, ram_avail, ram_used, ram_perc, gpu_avail, gpu_used, gpu_perc, gpu_temp, gpu_power, gpu_util, mem_util])
-        self.system_csv_writer.writerow(data)
-        self._sys_mon_lock.release()
+        self._system_data = np.array([self._thread_local.frame_nb, self._thread_local.cpu, self._thread_local.ram_avail, self._thread_local.ram_used, self._thread_local.ram_perc, self._thread_local.gpu_avail, self._thread_local.gpu_used, self._thread_local.gpu_perc, self._thread_local.gpu_temp, self._thread_local.gpu_power, self._thread_local.gpu_util, self._thread_local.mem_util], copy=True)
 
     @staticmethod
     def image_to_tensor(image, width, height):
@@ -126,8 +125,8 @@ class P3atDeepvio(Node):
         self._thread_local.camera_data = self.image_to_tensor(self._thread_local.camera_data, height, width)
 
         if self._thread_local.last_camera_data is not None:
-            self._flownet_lock.acquire()  # phase 2
-            start_time = time.perf_counter()  # phase 2
+            #self._flownet_lock.acquire()  # phase 2
+            #start_time = time.perf_counter()  # phase 2
             self._thread_local.last_camera_data = self.image_to_tensor(self._thread_local.last_camera_data, height, width)
 
             img_pair = [self._thread_local.last_camera_data, self._thread_local.camera_data]
@@ -136,13 +135,13 @@ class P3atDeepvio(Node):
             img_pair = np.expand_dims(img_pair, axis=0)
             self._thread_local.img_pair = torch.from_numpy(img_pair).type(torch.FloatTensor).to('cuda:0')
 
-            self._thread_local.feature_data = self._odometry_model.forward_flownet(self._thread_local.img_pair)  # phase 2
-            self._thread_local.flownet_time = (time.perf_counter() - start_time)  # phase 2
-            #self._thread_local.flownet_time = 0.0  # phase 1
+            #self._thread_local.feature_data = self._odometry_model.forward_flownet(self._thread_local.img_pair)  # phase 2
+            #self._thread_local.flownet_time = (time.perf_counter() - start_time)  # phase 2
+            self._thread_local.flownet_time = 0.0  # phase 1
 
-            self.push_to_tensor_alternative(self._img_seq, torch.clone(self._thread_local.feature_data))  # phase 2
-            self._flownet_lock.release()  # phase 2
-            #self.push_to_tensor_alternative(self._img_seq, self._thread_local.img_pair)  # phase 1
+            #self.push_to_tensor_alternative(self._img_seq, torch.clone(self._thread_local.feature_data))  # phase 2
+            #self._flownet_lock.release()  # phase 2
+            self.push_to_tensor_alternative(self._img_seq, self._thread_local.img_pair)  # phase 1
 
             odometry = None
 
@@ -159,8 +158,8 @@ class P3atDeepvio(Node):
                 prev_beliefs = self.beliefs
 
                 with torch.no_grad():
-                    self.beliefs, odometry, timing = self._odometry_model.forward(self._thread_local.img_seq, self._thread_local.imu_seq, prev_beliefs)  # phase 2
-                    #self.beliefs, odometry, self._thread_local.flownet_time, timing = self._odometry_model.forward_full(self._thread_local.img_seq, self._thread_local.imu_seq, prev_beliefs)  # phase 1
+                    #self.beliefs, odometry, timing = self._odometry_model.forward(self._thread_local.img_seq, self._thread_local.imu_seq, prev_beliefs)  # phase 2
+                    self.beliefs, odometry, self._thread_local.flownet_time, timing = self._odometry_model.forward_full(self._thread_local.img_seq, self._thread_local.imu_seq, prev_beliefs)  # phase 1
 
                 self._thread_local.mon_data = np.array([time.perf_counter(), self._thread_local.frame_nb, self._thread_local.flownet_time] + timing, copy=True)
                 self._model_lock.release()
@@ -204,6 +203,7 @@ class P3atDeepvio(Node):
 
                 self._monitoring_lock.acquire()
                 self.csvwriter.writerow(self._thread_local.mon_data)
+                self.system_csv_writer.writerow(self._system_data)
                 self._monitoring_lock.release()
 
     def camera_callback(self, msg):
